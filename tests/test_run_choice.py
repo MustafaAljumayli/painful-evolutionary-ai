@@ -348,7 +348,7 @@ def test_comprehension_is_unsteered_even_in_write_mode(monkeypatch, tmp_path, ca
     assert model.model.layers[2].mlp.down_proj.bias is None
     assert seen and set(seen) == {0.0}
     assert "named the target button" in capsys.readouterr().out
-    # the same flags in `run` do write
+    # control: apply_mode itself does write, so the None above is meaningful
     rc.apply_mode(model, "8B", torch.ones(32), "write", 1.0, tmp_path / "models.json")
     assert model.model.layers[2].mlp.down_proj.bias is not None
 
