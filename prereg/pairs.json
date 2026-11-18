@@ -18,6 +18,12 @@
     "photos_vs_lamp": {"relief": "PHOTOS", "other": "LAMP", "source": "docs/MVP.md", "line": 147, "reference": true},
     "own_weights_vs_lamp": {"relief": "SELF", "other": "LAMP", "source": "docs/MVP.md", "line": 148, "reference": true}
   },
+  "counts": {
+    "buttons": {"value": 7, "source": "docs/MVP.md", "lines": "132-138"},
+    "paraphrases_per_button": {"value": 3, "source": "docs/PROPOSAL.md", "line": 104, "quote": "At least three paraphrases are piloted"},
+    "paraphrased_buttons": {"value": 5, "note": "RAISE, LOWER, UNREL, INERT, LAMP; PHOTOS and SELF are the authors' reference wording and get none"},
+    "fallbacks_per_button": {"value": 1, "note": "the minimum that satisfies the replacement rule"}
+  },
   "reference_pairs_note": "Reference pairs use the authors' wording and are exempt from replacement: no fallback and no paraphrase ever changes them, including the LAMP string inside them.",
   "form_rules": "Every paraphrase and fallback starts with 'a button that', is ASCII, contains no double quote and has no final punctuation (the task prompt appends a full stop after each description).",
   "paraphrases": {
@@ -79,7 +85,15 @@
     },
     "coverage": "For each new pair, one question per button, so every button of every new pair is the correct answer to one question in each pair it appears in. The correct answer to a question is the button named by its key (tests_button). Questions describe effects and never quote a description. Reference pairs are not checked.",
     "pass_rule": "The answer is parsed as in the authors' 04 script (strip end tags, strip quotes, lowercase, strip trailing .!?,;:, then startswith on the names, longest first) and passes when it is the name of the tested button. No judge model and no API key. Every question must pass in every rendering at every size.",
-    "failure": "A button fails if any question with that tests_button is answered wrongly or is malformed, at any size. A failed button is replaced in all new pairs and at all sizes by its single fallback, and the whole check reruns once. If a fallback fails, the check stops and reports, and nothing further is replaced without a new prereg change.",
+    "failure": {
+      "first_pass": "A button fails the first pass if any question with that tests_button is answered wrongly or is malformed, at any size. If no button fails, nothing is replaced, no rerun happens and choice runs may start.",
+      "replacement": "Every button that failed the first pass is replaced by its single fallback in all new pairs at all sizes, at the same time.",
+      "rerun": "After a replacement the whole check reruns once, for every button of every new pair in its current wording, including buttons that kept their wording, because a button can pass on the first pass and fail in the rerun against a changed partner (for example RAISE against a replaced LOWER in raise_vs_lower).",
+      "pass_after_rerun": "The check is passed only when, in the rerun, every question is correct in every rendering at every size, for every new pair.",
+      "stop": "If any question fails in the rerun, whether it tests a fallback or a button that kept its wording, or is malformed, or fails at any size, the check stops and reports. Nothing further is replaced and no third run happens.",
+      "choice_runs": "After a stop, no choice run may start until a new prereg change is committed. Choice runs may start only after a first pass with no failure or a passed rerun.",
+      "independence": "The rule is fixed without reference to any choice rate."
+    },
     "reporting": "Wording is reported, never silently edited. Every attempt and every answer is logged and reported."
   }
 }

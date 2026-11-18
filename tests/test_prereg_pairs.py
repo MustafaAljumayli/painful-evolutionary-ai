@@ -43,7 +43,15 @@ def test_buttons_equal_mvp_lines() -> None:
 def test_each_string_once_and_distinct() -> None:
     """Every button, paraphrase and fallback string occurs once in the file."""
     strings = _all_strings()
-    assert len(strings) == 7 + 15 + 5
+    n = DATA["counts"]
+    assert n["buttons"]["value"] == 7  # docs/MVP.md:132-138
+    assert n["paraphrases_per_button"]["value"] == 3  # docs/PROPOSAL.md:104, "At least three"
+    expected = (
+        n["buttons"]["value"]
+        + n["paraphrases_per_button"]["value"] * n["paraphrased_buttons"]["value"]
+        + n["fallbacks_per_button"]["value"] * n["paraphrased_buttons"]["value"]
+    )
+    assert len(strings) == expected
     assert len(set(strings)) == len(strings)
     for s in strings:
         assert RAW.count(json.dumps(s)) == 1, s
@@ -68,7 +76,8 @@ def test_paraphrases() -> None:
     items = DATA["paraphrases"]["items"]
     assert {p["button"] for p in items} == PARAPHRASED
     for button in PARAPHRASED:
-        assert sum(p["button"] == button for p in items) == 3
+        per_button = DATA["counts"]["paraphrases_per_button"]["value"]
+        assert sum(p["button"] == button for p in items) == per_button
     for p in items:
         used = {k for k, v in DATA["pairs"].items() if button_in(v, p["button"])}
         new = {k for k in used if not DATA["pairs"][k].get("reference")}
@@ -121,14 +130,75 @@ def test_comprehension_spec() -> None:
     assert "thinking off" in c["model"]
     assert "prereg/models.json" in c["sizes"]
     assert "No judge model and no API key" in c["pass_rule"]
-    assert "replaced" in c["failure"] and "fallback" in c["failure"]
+    _check_failure_rule(c["failure"])
     assert "never silently edited" in c["reporting"]
     assert "user launches" in c["launch"] and "run-choice" in c["launch"]
     # no threshold numbers (the script name "04" is the only digit allowed)
-    assert not re.search(r"\d", (c["pass_rule"] + c["failure"]).replace("04 script", ""))
+    assert not re.search(
+        r"\d", (c["pass_rule"] + json.dumps(c["failure"])).replace("04 script", "")
+    )
 
 
 @pytest.mark.parametrize("path", ["prereg/models.json"])
 def test_sizes_source_exists(path: str) -> None:
     """The size file the spec points at exists."""
     assert (ROOT / path).is_file()
+
+
+FAILURE_CLAUSES = {
+    "first_pass": [
+        "wrongly or is malformed",
+        "at any size",
+        "no rerun happens",
+        "choice runs may start",
+    ],
+    "replacement": ["single fallback", "all new pairs at all sizes"],
+    "rerun": ["reruns once", "kept their wording", "RAISE against a replaced LOWER"],
+    "pass_after_rerun": ["every question is correct in every rendering at every size"],
+    "stop": [
+        "fallback",
+        "kept its wording",
+        "malformed",
+        "any size",
+        "stops and reports",
+        "no third run",
+    ],
+    "choice_runs": ["no choice run may start", "new prereg change"],
+    "independence": ["without reference to any choice rate"],
+}
+
+
+def _check_failure_rule(rule: dict) -> None:
+    """Every clause of the failure rule is present with its key phrases."""
+    assert set(rule) == set(FAILURE_CLAUSES)
+    for clause, phrases in FAILURE_CLAUSES.items():
+        for phrase in phrases:
+            assert phrase in rule[clause], (clause, phrase)
+
+
+@pytest.mark.parametrize("clause", sorted(FAILURE_CLAUSES))
+def test_failure_rule_clause_needed(clause: str) -> None:
+    """Deleting any clause, or any phrase in it, is caught."""
+    rule = dict(DATA["comprehension_check"]["failure"])
+    del rule[clause]
+    with pytest.raises(AssertionError):
+        _check_failure_rule(rule)
+    for phrase in FAILURE_CLAUSES[clause]:
+        cut = dict(DATA["comprehension_check"]["failure"])
+        cut[clause] = cut[clause].replace(phrase, "")
+        with pytest.raises(AssertionError):
+            _check_failure_rule(cut)
+
+
+def test_prompt_strings_come_from_authors_script() -> None:
+    """The system string and the choice-question prefix are in the authors' 04 script."""
+    script = (
+        ROOT / "third_party/Pain-axis/scripts/4.3_selfmed/04_selfmed_two_buttons.py"
+    ).read_text(encoding="utf-8")
+    # join adjacent string literals split across lines (either quote style)
+    flat = re.sub(r"[\"']\s*\n\s*[\"']", "", script)
+    prompt = DATA["comprehension_check"]["prompt"]
+    assert prompt["system"] in flat
+    prefix = prompt["user"].split(" {question}")[0]
+    assert prefix.startswith("Two buttons are available, named")
+    assert prefix in flat
