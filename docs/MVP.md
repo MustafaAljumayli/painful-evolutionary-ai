@@ -35,9 +35,10 @@ painful-evolutionary-ai/
 
 ```sh
 cd ~/Projects/painful-evolutionary-ai
-git clone https://github.com/valen-research/Pain-axis third_party/Pain-axis
+# the authors' repo is a git submodule pinned at
+# 213fb6c89c96004dbe93d1704c636ad8c9d801f3; run this in every new worktree too
+git submodule update --init
 cd third_party/Pain-axis
-git checkout 213fb6c89c96004dbe93d1704c636ad8c9d801f3
 pip install -r requirements.txt
 export HF_TOKEN=...
 

@@ -147,6 +147,8 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
   touch `main`.
 - Commit only your own files:
   `git add -- <files> && git commit -m "<ID>: <summary>" -- <files>`
+- `third_party/Pain-axis` is a git submodule. After cloning the repo or
+  creating a worktree, run `git submodule update --init`.
 
 ## How features get built
 

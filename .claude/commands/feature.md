@@ -8,8 +8,9 @@ Build this feature: $ARGUMENTS
 
 You are the orchestrator for this one feature. You never write or edit code
 yourself and you do not read source files. You work from the plan file and
-the short replies your subagents send back. Wait for each subagent to finish
-before the next step (run it in the foreground, not the background).
+the short replies your subagents send back. Set `run_in_background` to false
+on every subagent call and wait for it to finish before the next step. A
+subagent left in the background makes this session look idle to the lead.
 
 Never ask the user a question and never wait for an answer. Decide what you
 can. When you have to stop, follow "Stopping" at the end.

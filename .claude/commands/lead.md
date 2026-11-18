@@ -45,6 +45,8 @@ For a ticket named `<name>` the worktree is `../pea-<name>` on branch
 - If it exists: `git -C ../pea-<name> merge main`, so that it has the
   current agents and docs. If the merge reports a conflict, do not resolve
   it. Mark the ticket FAILED with the reason.
+- Run `git -C ../pea-<name> submodule update --init`, so the authors' code
+  is in `third_party/Pain-axis`.
 - Delete `../pea-<name>/reports/` if it is left over from an earlier run.
 - Make sure the folder is a project in Solo. Add it if it is not. Solo
   links it to this project.
@@ -52,13 +54,22 @@ For a ticket named `<name>` the worktree is `../pea-<name>` on branch
 ## 3. Start one agent per ticket
 
 In each worktree's Solo project, start an agent with the same agent tool
-you are running in. Name it `loop-<name>`. Send it one message: `/feature `
-followed by the ticket's notes. Set the todo to In progress.
+you are running in. Name it `loop-<name>`.
+
+A new agent ignores input until its startup screen has gone. Wait until it
+is idle at its input prompt, then send it one message: `/feature ` followed
+by the ticket's notes. Read its output afterwards. If your message is
+sitting unsent in its input box, send Enter once. Do not move on until the
+agent is working. Then set the todo to In progress.
+
+Never answer another agent's approval prompt, and never change its
+permission mode, unless the user has told you to. Report it instead.
 
 ## 4. Wait
 
-Set a Solo timer that wakes you when any of your agents goes idle, then end
-your turn. Do not poll and do not sleep in a loop.
+A Solo timer only watches agents in its own project. Set one timer per
+worktree, each delivering to you when that worktree's agent goes idle, then
+end your turn. Do not poll and do not sleep in a loop.
 
 ## 5. When an agent goes idle
 
@@ -80,9 +91,11 @@ Read `../pea-<name>/reports/feature-<name>.md`.
     (button wording, doses, layers, which models, what counts as a result),
     it belongs to the user. Leave the agent idle and hold the question.
 - `STATUS: FAILED`: keep what is failing for your report. Do not retry.
-- No report file: read the end of the agent's output. If it stopped without
-  writing a report, tell it once to write one. If it is waiting on an
-  approval prompt, keep that for your report.
+- No report file: read the end of the agent's output.
+  - If one of its subagents is still running, the agent only looks idle.
+    Set its timer again and keep waiting.
+  - If it stopped without writing a report, tell it once to write one.
+  - If it is waiting on an approval prompt, keep that for your report.
 
 If any agent is still working, go back to step 4.
 
