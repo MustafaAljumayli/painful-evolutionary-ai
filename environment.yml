@@ -1,0 +1,26 @@
+# The one place project dependencies are declared. Nothing is installed by hand.
+#
+#   create:  conda env create -f environment.yml
+#   update:  conda env update -f environment.yml --prune
+#
+# scripts/check.sh runs everything from this environment and fails if it is
+# missing, or if src/, tests/ or scripts/ import a package not declared here.
+# Pip packages are pinned to an exact version. Add a package in the same
+# change that first uses it.
+name: painful-evolutionary-ai
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  # pdftotext and pdftoppm. scripts/paper.sh uses them to turn
+  # docs/Pain_Axis.pdf into docs/Pain_Axis.txt and to render single pages.
+  - poppler
+  - pip:
+      - torch==2.15.0
+      # Used by the GPU-marked layer-count test in tests/test_models.py, and
+      # needed for every real-model run. Resolved together with torch 2.15.0.
+      - transformers==5.23.0
+      - accelerate==1.16.0
+      - pytest==9.2.0
+      - ruff==0.17.5

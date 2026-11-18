@@ -16,15 +16,19 @@ section at the end of the same brief.
 
 ## Where to look, in this order
 
-1. This repo: `README.md`, `CLAUDE.md`, everything under `docs/` (the MVP
-   plan and the paper, when they are there), earlier briefs under
-   `research/`, and the code in `src/` and `tests/`.
-2. The authors' code in `third_party/Pain-axis`. Record its commit with
-   `git -C third_party/Pain-axis rev-parse HEAD`. If the folder is missing,
-   read the same files from https://github.com/valen-research/Pain-axis and
-   say in the brief that you read the web copy, and of which branch or commit.
-3. The paper: the copy under `docs/` if there is one, otherwise
-   https://arxiv.org/abs/2609.16247.
+1. The paper. Reading it is required for every feature. Read
+   `docs/Pain_Axis.txt`, the full text of `docs/Pain_Axis.pdf`. Search it
+   for the feature's terms, then read in full every section, footnote and
+   appendix that bears on the feature. Under "Sources read", list the line
+   ranges you read. Cite it as `docs/Pain_Axis.txt:<line>`. If a table or
+   figure is garbled in the text, run `./scripts/paper.sh page <number>` and
+   read the image it prints. Never read the paper from the web or from
+   memory when this file exists.
+2. This repo: `CLAUDE.md`, `docs/PROPOSAL.md`, `docs/MVP.md`, earlier briefs
+   under `research/`, and the code in `src/` and `tests/`.
+3. The authors' code in `third_party/Pain-axis`. Record its commit with
+   `git -C third_party/Pain-axis rev-parse HEAD`. If the folder is empty,
+   run `git submodule update --init` first.
 4. Library documentation for the exact call the feature needs. Check the
    installed version first with `.venv/bin/python -m pip show <package>`.
 5. The wider web, only for a specific question the sources above cannot
@@ -49,6 +53,8 @@ section at the end of the same brief.
   code actually does.
 - Answer what this feature needs. This is not a literature review. Keep the
   brief under 150 lines.
+- Executors design from this brief with no plan to lean on. Give them the
+  facts, the exact values and the traps. Do not design the code for them.
 - You may read files, run `git log`, `git show` and `git grep`, and run a
   CPU-only one-liner to inspect a small text or JSON file.
 - Never download model weights or datasets, start a GPU job, run the
@@ -60,7 +66,7 @@ section at the end of the same brief.
 ```
 # Research: <feature in one line>
 
-Sources read: <authors' repo commit, paper version, docs files>
+Sources read: <paper line ranges, authors' repo commit, docs files>
 
 ## Questions
 The three to seven things this feature needs to know.

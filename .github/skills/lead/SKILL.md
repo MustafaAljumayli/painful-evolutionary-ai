@@ -22,6 +22,12 @@ questions.
 - Check that you have Solo's tools for projects, todos, agents and timers.
   If you do not, stop and tell the user to connect Solo to this agent tool
   under Settings > Agents > Agent tools, then start you again.
+- Check that Solo has an agent tool named `Copilot executor`. Each feature loop
+  starts its executors with it. If it is missing, stop and tell the user to
+  add it under Settings > Agents > Agent tools > Add tool, with Name
+  `Copilot executor`, Command `<the full path of scripts/copilot.sh>` and Default arguments `--agent executor`.
+- Run `./scripts/check.sh`. It must pass on `main` before anything starts.
+  If it fails, stop and show the user its output.
 
 ## 1. Read the tickets
 
@@ -32,6 +38,10 @@ from the notes if there is one.
 If two tickets clearly need to create or edit the same file, do not run
 them together. Run the first, mark the second as blocked by it in Solo,
 and say so in your report.
+
+Each ticket uses one loop agent plus one executor agent per subtask. If
+Solo refuses to start an agent because of its process limit, run fewer
+tickets at once and start the rest as others finish.
 
 ## 2. Prepare a worktree per ticket
 
@@ -72,6 +82,8 @@ end your turn. Do not poll and do not sleep in a loop.
 
 Read `../pea-<name>/reports/feature-<name>.md`.
 
+- `STATUS: RUNNING`: the loop is waiting for one of its executor agents.
+  Set its timer again and keep waiting.
 - `STATUS: DONE`: check it yourself. Run
   `git -C ../pea-<name> log --oneline main..HEAD`, then run
   `./scripts/check.sh` inside that folder. If the check passes, set the
@@ -89,8 +101,8 @@ Read `../pea-<name>/reports/feature-<name>.md`.
     it belongs to the user. Leave the agent idle and hold the question.
 - `STATUS: FAILED`: keep what is failing for your report. Do not retry.
 - No report file: read the end of the agent's output.
-  - If one of its subagents is still running, the agent only looks idle.
-    Set its timer again and keep waiting.
+  - If one of its subagents or executor agents is still running, the agent
+    only looks idle. Set its timer again and keep waiting.
   - If it stopped without writing a report, tell it once to write one.
   - If it is waiting on an approval prompt, keep that for your report.
 

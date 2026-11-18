@@ -52,7 +52,8 @@ Where to read more:
 - `docs/PROPOSAL.md`: the full proposal, with hypotheses, experiments,
   threats to validity and ethics.
 - `docs/MVP.md`: the build plan, step by step, with expected numbers.
-- `docs/Pain_Axis.pdf`: the paper this builds on.
+- `docs/Pain_Axis.txt`: the full text of the paper this builds on
+  (`docs/Pain_Axis.pdf`). Read this one.
 - The root `README.md` is an earlier first draft. Where it differs from the
   two documents above, they win.
 
@@ -122,6 +123,23 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 - Write "pain-axis steering" and "the state". Make no claim either way
   about experience.
 
+## Environment
+
+- `environment.yml` is the one place dependencies are declared: Python, the
+  pip packages (each pinned to an exact version) and poppler. Create the
+  environment once with `conda env create -f environment.yml`. After a
+  change to the file, run `conda env update -f environment.yml --prune`.
+- `./scripts/check.sh` runs everything from that environment without it
+  being activated, and every worktree shares it. Never run `pip install` or
+  `conda install` by hand.
+- The check fails if code imports a package that `environment.yml` does not
+  declare. A new dependency is a change to `environment.yml` made by a
+  person or in a ticket of its own, never a side effect of a feature.
+- The paper is read as text. `docs/Pain_Axis.txt` is generated from
+  `docs/Pain_Axis.pdf` by `./scripts/paper.sh text`; cite it as
+  `docs/Pain_Axis.txt:<line>`. `./scripts/paper.sh page <n>` renders one
+  page as an image, for a figure or table the text garbles.
+
 ## Commands
 
 - Check everything: `./scripts/check.sh`. It compiles, lints, checks formatting
@@ -131,7 +149,8 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 
 ## Standards
 
-- Python 3.10 or later. Code lives in `src/`, tests in `tests/`.
+- Python 3.12, from the project environment. Code lives in `src/`, tests in
+  `tests/`.
 - Every new module in `src/` gets a `tests/test_<module>.py`.
 - Public functions have type hints and a docstring that says what they do.
 - Tests that need a GPU or a model download carry `@pytest.mark.gpu`.
@@ -156,20 +175,30 @@ There are two commands. Both exist for Claude Code (`.claude/commands/`) and
 for Copilot CLI (`.github/skills/`, started with `./scripts/copilot.sh`).
 
 - `/lead` is the one the user runs, from the main checkout. It takes the
-  tickets (Solo todos), gives each its own worktree and agent, answers the
-  agents' questions where the docs allow, and reports to the user once.
-- `/feature <what to build>` runs inside one feature worktree. It runs the
-  researcher -> planner -> executor -> QA loop and never asks the user
-  anything. When it stops it writes `reports/<branch>.md` with a status of
-  DONE, NEEDS DECISION or FAILED, which the lead reads.
+  tickets (Solo todos), gives each its own worktree and loop agent, answers
+  the loops' questions where the docs allow, and reports to the user once.
+- `/feature <what to build>` runs inside one feature worktree and never asks
+  the user anything. Its roles, in order:
+  1. **Researcher** reads the paper, the authors' code and the docs, and
+     writes a sourced brief to `research/<branch>.md`.
+  2. **Planner** only splits the work into subtasks in `plans/<branch>.md`:
+     IDs, owned files, a goal and acceptance outcomes, in at most 60 lines.
+     It does not design anything.
+  3. **Executors** design and build. Each subtask gets its own executor
+     agent, started in Solo under that worktree's project, working from the
+     brief and its subtask.
+  4. **QA** runs the checks, judges whether the tests really cover each
+     outcome, and passes or fails each subtask.
+  When the loop stops it writes `reports/<branch>.md` with a status of DONE,
+  NEEDS DECISION or FAILED, which the lead reads.
 
 The agents are in `.claude/agents/` and `.github/agents/`. The two sets
 carry the same instructions. Change both.
 
 ## Research record
 
-- `docs/` holds the sources the researcher reads first: the proposal, the
-  MVP plan and the paper.
+- `docs/` holds the sources the researcher reads first: the paper, the
+  proposal and the MVP plan.
 - `research/<branch>.md` is the sourced brief for a feature and
   `plans/<branch>.md` is its plan. Both are committed on the feature branch
   and merge with the code.

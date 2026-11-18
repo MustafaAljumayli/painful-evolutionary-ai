@@ -35,11 +35,14 @@ painful-evolutionary-ai/
 
 ```sh
 cd ~/Projects/painful-evolutionary-ai
+# every dependency, including poppler for reading the paper, is declared in
+# environment.yml; nothing is installed by hand
+conda env create -f environment.yml
+conda activate painful-evolutionary-ai
 # the authors' repo is a git submodule pinned at
 # 213fb6c89c96004dbe93d1704c636ad8c9d801f3; run this in every new worktree too
 git submodule update --init
 cd third_party/Pain-axis
-pip install -r requirements.txt
 export HF_TOKEN=...
 
 # the scripts expect vectors under results/<model>/final_token/
@@ -50,6 +53,8 @@ done
 ```
 
 Do the same copy for the two Qwen3 models once you have read their folder names under `results/3.2_pain_vectors/pain_vectors/`.
+
+The authors' scripts need packages that ours do not yet declare. Their `requirements.txt` lists them without versions (transformer_lens, peft, pandas and others). Before the first step that runs one of their scripts, add each package to `environment.yml` with an exact version and update the environment. Do not `pip install -r` their file.
 
 Change these before running anything:
 

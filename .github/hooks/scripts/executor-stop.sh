@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copilot CLI version of the executor stop check.
-# Runs each time the executor subagent tries to finish. While scripts/check.sh
+# Runs each time an executor agent tries to finish. While scripts/check.sh
 # fails, it prints {"decision":"block","reason":...} so Copilot sends the
 # executor back to fix its own work. After 3 blocks it lets the executor stop,
 # and QA catches whatever is left.
@@ -23,7 +23,7 @@ for key in sys.argv[1:]:
 ' "$@"
 }
 
-agent_id="$(field agentId agent_id)"
+agent_id="$(field agentId agent_id sessionId session_id)"
 cwd="$(field cwd)"
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then cd "$cwd" || exit 0; fi
 

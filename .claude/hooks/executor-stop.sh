@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs each time an executor subagent tries to finish.
+# Runs each time an executor agent tries to finish.
 # While scripts/check.sh fails, this blocks the executor (exit 2) and hands it
 # the output so it fixes its own work. After 3 blocks it lets the executor
 # stop, and QA catches whatever is left.
@@ -12,23 +12,27 @@ field() {
   printf '%s' "$input" | python3 -c '
 import json, sys
 try:
-    print(json.load(sys.stdin).get(sys.argv[1]) or "")
+    data = json.load(sys.stdin)
 except Exception:
-    print("")
-' "$1"
+    data = {}
+for key in sys.argv[1:]:
+    if data.get(key):
+        print(data[key])
+        break
+' "$@"
 }
 
-agent_id="$(field agent_id)"
+agent_id="$(field agent_id session_id)"
 cwd="$(field cwd)"
 if [ -n "$cwd" ] && [ -d "$cwd" ]; then cd "$cwd" || exit 0; fi
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
-[ -x "$root/scripts/check.sh" ] || exit 0
+[ -f "$root/scripts/check.sh" ] || exit 0
 
 count_file="${TMPDIR:-/tmp}/executor-stop-${agent_id:-unknown}.count"
 blocks="$(cat "$count_file" 2>/dev/null || echo 0)"
 
-if output="$("$root/scripts/check.sh" 2>&1)"; then
+if output="$(bash "$root/scripts/check.sh" 2>&1)"; then
   rm -f "$count_file"
   exit 0
 fi

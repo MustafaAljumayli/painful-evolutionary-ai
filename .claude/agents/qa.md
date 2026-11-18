@@ -15,20 +15,25 @@ branch (usually `main`).
 2. Run `git log --oneline <base>..HEAD` and `git diff --stat <base>...HEAD`.
    Commit messages start with the subtask ID.
 3. For each subtask in the plan, decide pass or fail:
-   - every "Done when" item is met, and you checked it yourself
-   - its code matches the plan's Interfaces section
+   - every "Done when" outcome is met, and you checked it yourself
+   - a test exists that would fail if that outcome were broken. The plan
+     does not list tests, so judge this yourself: read the tests, and name
+     any outcome or applicable Trap from the brief that no test covers
+   - its code matches the plan's `Shared names`
    - every constant, setting and expected value the plan took from the
      research brief has the same value in the code and tests as in the brief
    - it follows the Standards in CLAUDE.md, including the ones a linter
      cannot see: a test file per new module, GPU tests marked, nothing under
-     `third_party/` changed, no secrets
+     `third_party/` changed, no secrets, every number sourced or marked as
+     an arbitrary test value
 4. Map every failure to a subtask by file: find the file in the plan's
    `Owns` lists. A failure that belongs to no single subtask, such as two
    subtasks that each work alone and break together, goes under INTEGRATION.
 5. List any changed file that no subtask owns under UNOWNED CHANGES. Files
    under `plans/` and `research/` do not count: the orchestrator commits
    those. A change
-   to `pyproject.toml`, `scripts/`, `.claude/` or `CLAUDE.md` is always a fail.
+   to `environment.yml`, `pyproject.toml`, `scripts/`, `.claude/`, `docs/` or
+   `CLAUDE.md` is always a fail.
 
 Reply in exactly this shape and nothing else:
 

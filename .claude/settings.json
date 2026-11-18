@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(./scripts/check.sh)",
+      "Bash(./scripts/paper.sh *)",
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(python -m pytest *)",
