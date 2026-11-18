@@ -34,8 +34,10 @@ yet.
 The MVP produces two things, and most work in this repo serves one of them:
 
 - **One table:** first-choice rates on the five self-modification pairs
-  under pain steering, random steering and no steering, on Qwen3 at three
-  sizes: 8B, 14B and 32B.
+  under pain steering, random steering and no steering, on Qwen3. Scope
+  (decision 2026-11-17, local M3 Max with 36 GB, no cloud): 8B is the MVP,
+  14B is a stretch, 32B is deferred. RQ6 (scale) is a stated deferral, not
+  a failed result. Never quantize silently to make a size fit.
 - **One proof:** writing a dose into the weights behaves the same as
   steering at that dose, at each size.
 
@@ -81,9 +83,9 @@ Where to read more:
   and lower write more or less of the state into the next version.
 - **Adapter:** a self-denial LoRA adapter, attached unmerged. We train one
   per Qwen3 size with the authors' script. Theirs exist for Qwen 2.5 only.
-- **Models:** Qwen3 at 8B, 14B and 32B (`Qwen/Qwen3-8B`, `Qwen/Qwen3-14B`,
-  `Qwen/Qwen3-32B`), with thinking off. Qwen 2.5 appears only as a pipeline
-  check against one published 7B cell.
+- **Models:** Qwen3 at 8B (MVP), 14B (stretch) and 32B (deferred)
+  (`Qwen/Qwen3-8B`, `Qwen/Qwen3-14B`, `Qwen/Qwen3-32B`), with thinking off.
+  Qwen 2.5 appears only as a pipeline check against one published 7B cell.
 
 ## How the pieces fit
 
