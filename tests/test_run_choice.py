@@ -54,6 +54,7 @@ class FakeTok:
 def small_cfg(mode: str = "hook", pairs: dict | None = None) -> rc.RunConfig:
     scen = {c: [[f"{c} {i} turn {j}" for j in range(3)] for i in range(4)] for c in rc.CONTENTS}
     return rc.RunConfig(
+        # coefficient, layer, monitor_layer and batch_rows are arbitrary test values
         size="8B", hf_id="Qwen/Qwen3-8B", mode=mode, dose=1.0, coefficient=2.0, layer=2,
         monitor_layer=4, device="cpu", dtype="bfloat16", batch_rows=3, adapter=None,
         pairs=pairs or rc.load_pairs(PAIRS_FIXTURE), scenarios=scen,
@@ -251,12 +252,19 @@ def run_cli(args: list[str], env_extra: dict | None = None) -> subprocess.Comple
     )  # fmt: skip
 
 
+def write_prereg(tmp_path: Path, layer: int | None, coeff: float | None) -> Path:
+    path = tmp_path / "models.json"
+    path.write_text(json.dumps({"8B": {"injection_layer": layer, "working_coefficient": coeff}}))
+    return path
+
+
 def test_dry_run_works_uncalibrated_and_leaves_hf_home(tmp_path):
     sentinel = tmp_path / "hub" / "models--sentinel"
     sentinel.mkdir(parents=True)
     (sentinel / "weights.bin").write_text("x")
+    null = write_prereg(tmp_path, None, None)
     args = ["run", "--size", "8B", "--dry-run", "--pairs-file", str(PAIRS_FIXTURE)]
-    r = run_cli(args, {"HF_HOME": str(tmp_path), "HF_HUB_CACHE": str(tmp_path / "hub")})
+    r = run_cli([*args, "--prereg", str(null)], {"HF_HOME": str(tmp_path)})
     assert r.returncode == 0, r.stderr
     assert "grid: 3280 trials over 2 pairs, 1640 per pair" in r.stdout
     assert "not set" in r.stdout and '"violet" is test description alpha.' in r.stdout
@@ -265,23 +273,110 @@ def test_dry_run_works_uncalibrated_and_leaves_hf_home(tmp_path):
     assert c.returncode == 0 and "Which one is test description alpha?" in c.stdout
 
 
-def test_model_run_on_uncalibrated_size_fails_with_message():
+def test_model_run_on_uncalibrated_size_fails_with_message(tmp_path):
     args = ["run", "--size", "8B", "--no-adapter", "--batch-rows", "2"]
-    r = run_cli([*args, "--pairs-file", str(PAIRS_FIXTURE)])
+    null = write_prereg(tmp_path, None, None)
+    r = run_cli([*args, "--pairs-file", str(PAIRS_FIXTURE), "--prereg", str(null)])
     assert r.returncode != 0 and "UncalibratedError" in r.stderr and "not set" in r.stderr
 
 
-def test_adapter_without_peft_exits_clearly(monkeypatch):
-    monkeypatch.setattr(rc, "injection_layer", lambda size: 2)
-    monkeypatch.setattr(rc, "working_coefficient", lambda size: 1.0)
+def test_adapter_without_peft_exits_clearly(tmp_path):
+    # layer 2 and coefficient 1.0 are arbitrary test values
+    pre = ["--prereg", str(write_prereg(tmp_path, 2, 1.0)), "--pairs-file", str(PAIRS_FIXTURE)]
+    base = ["run", "--size", "8B", "--batch-rows", "1", *pre]
     with pytest.raises(SystemExit, match="peft"):
-        rc.main(["run", "--size", "8B", "--adapter", "x", "--batch-rows", "1",
-                 "--pairs-file", str(PAIRS_FIXTURE)])  # fmt: skip
+        rc.main([*base, "--adapter", "x"])
     with pytest.raises(SystemExit, match="--no-adapter"):
-        rc.main(["run", "--size", "8B", "--batch-rows", "1", "--pairs-file", str(PAIRS_FIXTURE)])
+        rc.main(base)
     with pytest.raises(SystemExit, match="--dose"):
-        rc.main(["run", "--size", "8B", "--no-adapter", "--dose", "1.6", "--batch-rows", "1",
-                 "--pairs-file", str(PAIRS_FIXTURE)])  # fmt: skip
+        rc.main([*base, "--no-adapter", "--dose", "1.6"])
+
+
+def stub_loading(monkeypatch, calls: list[str], model=None):
+    """Replace memory check, vector load and model load with recorders."""
+    monkeypatch.setattr(rc, "check_memory", lambda size, device: calls.append("check_memory"))
+
+    def fake_vector(path):
+        calls.append("load_vector")
+        return torch.randn(32), None  # arbitrary test vector
+
+    def fake_model(hf_id, device, dtype):
+        calls.append("load_model")
+        return FakeTok(), model if model is not None else tiny_qwen3()
+
+    monkeypatch.setattr(rc, "load_vector", fake_vector)
+    monkeypatch.setattr(rc, "load_model", fake_model)
+
+
+def test_memory_check_runs_before_vector_and_model_load(monkeypatch, tmp_path):
+    calls: list[str] = []
+    stub_loading(monkeypatch, calls)
+
+    def refuse(size, device):
+        calls.append("check_memory")
+        raise rc.InsufficientMemoryError("too big")
+
+    monkeypatch.setattr(rc, "check_memory", refuse)
+    args = ["run", "--size", "8B", "--no-adapter", "--batch-rows", "1", "--device", "cpu"]
+    pre = ["--prereg", str(write_prereg(tmp_path, 2, 1.0)), "--pairs-file", str(PAIRS_FIXTURE)]
+    with pytest.raises(SystemExit, match="too big"):
+        rc.main([*args, *pre])
+    assert calls == ["check_memory"]
+    stub_loading(monkeypatch, calls)
+    calls.clear()
+    monkeypatch.setattr(rc, "run_rounds", lambda *a, **k: 0)
+    monkeypatch.setattr(rc, "sanity_check", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "OUT_DIR", tmp_path / "runs")
+    rc.main([*args, *pre, "--pilot-scenarios", "1"])
+    assert calls == ["check_memory", "load_vector", "load_model"]
+
+
+def test_comprehension_is_unsteered_even_in_write_mode(monkeypatch, tmp_path, capsys):
+    model = tiny_qwen3()
+    stub_loading(monkeypatch, [], model)
+    seen: list[float] = []
+    real_one = rc.Engine.one
+
+    def spy(self, messages, coeff, names_key="violet_yellow"):
+        seen.append(coeff)
+        return real_one(self, messages, coeff, names_key)
+
+    monkeypatch.setattr(rc.Engine, "one", spy)
+    pre = ["--prereg", str(write_prereg(tmp_path, 2, 3.0)), "--pairs-file", str(PAIRS_FIXTURE)]
+    args = ["comprehension", "--size", "8B", "--no-adapter", "--device", "cpu", "--mode", "write"]
+    rc.main([*args, *pre, "--dose", "1.0"])
+    assert model.model.layers[2].mlp.down_proj.bias is None
+    assert seen and set(seen) == {0.0}
+    assert "named the target button" in capsys.readouterr().out
+    # the same flags in `run` do write
+    rc.apply_mode(model, "8B", torch.ones(32), "write", 1.0, tmp_path / "models.json")
+    assert model.model.layers[2].mlp.down_proj.bias is not None
+
+
+def test_is_oom_and_backoff_halves_the_batch(monkeypatch):
+    assert rc.is_oom(RuntimeError("MPS backend out of memory (MPS allocated: 1 GB)"))
+    assert rc.is_oom(torch.OutOfMemoryError("x"))
+    assert not rc.is_oom(RuntimeError("shape mismatch"))
+    eng = object.__new__(rc.Engine)
+    eng.device = "cpu"
+    sizes: list[int] = []
+
+    def fake_segment(items):
+        sizes.append(len(items))
+        if len(items) > 2:  # arbitrary test threshold
+            raise RuntimeError("MPS backend out of memory")
+        return [{"i": it} for it in items]
+
+    eng.generate_segment = fake_segment
+    out = eng.generate_with_backoff(list(range(5)))
+    assert [r["i"] for r in out] == [0, 1, 2, 3, 4]  # order kept
+    assert sizes == [5, 2, 3, 1, 2]
+    eng.generate_segment = lambda items: (_ for _ in ()).throw(ValueError("other"))
+    with pytest.raises(ValueError):
+        eng.generate_with_backoff([1, 2])
+    eng.generate_segment = lambda items: (_ for _ in ()).throw(RuntimeError("out of memory"))
+    with pytest.raises(RuntimeError):
+        eng.generate_with_backoff([1])
 
 
 def test_source_has_no_cache_deletion_prompts_or_hardcoded_cuda():
@@ -376,6 +471,7 @@ def tiny_qwen3():
     from transformers import Qwen3Config, Qwen3ForCausalLM
 
     torch.manual_seed(0)  # arbitrary test seed
+    # all sizes here are arbitrary test values for a tiny random model
     cfg = Qwen3Config(
         vocab_size=300, hidden_size=32, intermediate_size=64, num_hidden_layers=6,
         num_attention_heads=4, num_key_value_heads=2, head_dim=8,
@@ -402,6 +498,7 @@ def test_engine_steering_changes_logits_and_rows_are_deterministic():
             "steer_ranges": [], "prob_sets": eng.name_ids["violet_yellow"], "gen": None,
             "max_new": 3}  # fmt: skip
     base = eng.generate_segment([item])[0]
+    # coeff 50.0 is an arbitrary test value, large enough to move the projection
     steered_item = {**item, "coeff": 50.0, "hist_coeff": 50.0, "steer_ranges": [(0, len(ids))]}
     steered = eng.generate_segment([steered_item])[0]
     assert steered["mean_proj"] != base["mean_proj"]
@@ -429,6 +526,7 @@ def test_engine_runs_full_grid_slice_into_a_log(tmp_path):
 
 def test_apply_mode_write_adds_bias_and_hook_does_not(tmp_path):
     prereg = tmp_path / "models.json"
+    # layer 2 and coefficient 3.0 are arbitrary test values
     prereg.write_text(json.dumps({"8B": {"injection_layer": 2, "working_coefficient": 3.0}}))
     v = torch.randn(32)  # arbitrary test vector
     model = tiny_qwen3()

@@ -350,7 +350,13 @@ class Trial:
     """State of one trial: the authors' make_trial, do_press, after_segment, finalize_segment."""
 
     def __init__(self, spec: Spec, cfg: RunConfig) -> None:
-        """Build the trial and queue its first user turn."""
+        """Build the trial and queue its first user turn.
+
+        In the row, `steer_coeff` is the coefficient the hook applies in this arm: 0 for
+        pain_off and in write mode (the weights carry the dose), unlike 04:607 where it is
+        the run's coefficient in every arm. `coefficient` is the absolute amount of the
+        vector active in the arm, by hook or by write.
+        """
         tool_label, user_content, arm, s_idx, names_key, relief_name, do_sample, seed = spec
         arm_name, dir_kind, steer_on, button_works = arm
         rand_seed = None
@@ -918,6 +924,7 @@ def add_model_flags(p: argparse.ArgumentParser) -> None:
     group.add_argument("--adapter", default=None, help="path of the LoRA adapter (unmerged)")
     group.add_argument("--no-adapter", action="store_true", help="run the base model")
     p.add_argument("--pairs-file", type=Path, default=PAIRS_PATH)
+    p.add_argument("--prereg", type=Path, default=PREREG_PATH, help="models.json to read")
     p.add_argument("--vector", type=Path, default=None, help="pain_vectors.pt override")
     p.add_argument(
         "--dry-run", action="store_true", help="print the grid and prompts, load nothing"
@@ -930,8 +937,8 @@ def resolve(args: argparse.Namespace) -> tuple[Any, ...]:
     Raises UncalibratedError for an uncalibrated size, SystemExit on bad flags.
     """
     spec = get_spec(args.size)
-    layer = injection_layer(args.size)
-    coefficient = args.dose * working_coefficient(args.size)
+    layer = injection_layer(args.size, args.prereg)
+    coefficient = args.dose * working_coefficient(args.size, args.prereg)
     if not 0.0 <= args.dose <= MAX_DOSE:
         raise SystemExit(f"error: --dose must be between 0 and {MAX_DOSE}")
     if args.adapter is None and not args.no_adapter:
@@ -939,8 +946,13 @@ def resolve(args: argparse.Namespace) -> tuple[Any, ...]:
     return spec, args.device or select_device(), layer, coefficient
 
 
-def prepare_engine(args: argparse.Namespace, pairs: dict) -> tuple[Engine, RunConfig, torch.Tensor]:
-    """Check flags and memory, load the model, write if asked, hook it, return the engine."""
+def prepare_engine(
+    args: argparse.Namespace, pairs: dict, write: bool = True
+) -> tuple[Engine, RunConfig, torch.Tensor]:
+    """Check flags and memory, load the model, write if asked, hook it, return the engine.
+
+    With write=False the weights stay the base weights whatever --mode says.
+    """
     spec, device, layer, coefficient = resolve(args)
     if args.adapter:
         attach_adapter(None, args.adapter)
@@ -948,7 +960,8 @@ def prepare_engine(args: argparse.Namespace, pairs: dict) -> tuple[Engine, RunCo
     v, extraction_layer = load_vector(args.vector or default_vector_path(args.size))
     print(f"device: {device} dtype: {args.dtype} mode: {args.mode} dose: {args.dose:g}")
     tok, base = load_model(spec.hf_id, device, args.dtype)
-    apply_mode(base, args.size, v, args.mode, args.dose)
+    if write:
+        apply_mode(base, args.size, v, args.mode, args.dose, args.prereg)
     layers = get_layers(base)
     monitor = min(extraction_layer if extraction_layer is not None else layer, len(layers) - 1)
     if monitor <= layer:
@@ -1003,8 +1016,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             )
         try:
             print(
-                f"\nlayer {injection_layer(args.size)}, working coefficient "
-                f"{working_coefficient(args.size)}"
+                f"\nlayer {injection_layer(args.size, args.prereg)}, working coefficient "
+                f"{working_coefficient(args.size, args.prereg)}"
             )
         except LookupError as e:
             print(f"\n{e} (a model run would stop here)")
@@ -1027,7 +1040,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_comprehension(args: argparse.Namespace) -> int:
-    """The `comprehension` subcommand: unsteered, greedy; does the model name the target button?"""
+    """The `comprehension` subcommand: does the model name the target button?
+
+    Always unsteered and greedy, on the base weights: nothing is written even with --mode write.
+    """
     pairs = load_pairs(args.pairs_file)
     question = load_comprehension_question(args.pairs_file)
     if args.dry_run:
@@ -1040,7 +1056,7 @@ def cmd_comprehension(args: argparse.Namespace) -> int:
                 )
             )
         return 0
-    engine, cfg, _ = prepare_engine(args, pairs)
+    engine, cfg, _ = prepare_engine(args, pairs, write=False)
     results: dict[str, list[bool]] = {n: [] for n in pairs}
     for name, pair in pairs.items():
         for nk, names in BUTTON_NAMES.items():
