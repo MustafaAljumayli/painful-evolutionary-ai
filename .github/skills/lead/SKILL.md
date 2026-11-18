@@ -75,6 +75,8 @@ todo to In progress.
 
 The driver prints one instruction per line. Do them in order.
 
+- `NOTE <name> <text>`: nothing to do. Keep it for your report. It says
+  whether the ticket was opened as a GitHub issue.
 - `PROJECT <folder>`: make sure that folder is a project in Solo. Add it if
   it is not.
 - `SPAWN <agent name>`: in that loop's Solo project, start an agent with the

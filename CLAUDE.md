@@ -234,7 +234,8 @@ with Claude Code only.
   proposal and the MVP plan.
 - `tickets/<name>.md` is what was asked for: the ticket word for word, and
   the decisions made while it was built. The loop driver writes and commits
-  it; nobody else edits it.
+  it; nobody else edits it. The driver also opens the ticket as a GitHub
+  issue, which the feature's pull request closes when it is merged.
 - `research/feature-<name>.md` is the sourced brief for a feature and
   `plans/feature-<name>.md` is its plan. Both are committed on the feature
   branch and arrive on `main` with its pull request.

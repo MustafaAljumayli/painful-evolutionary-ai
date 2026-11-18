@@ -73,6 +73,7 @@ def load(name: str) -> dict:
         ("needs_publish", False),
         ("pr_class", ""),
         ("ticket_file", f"tickets/{name}.md"),
+        ("issue", None),
     ):
         state.setdefault(key, default)
     return state
@@ -95,6 +96,42 @@ def save(state: dict) -> None:
         (reports / "next.env").unlink(missing_ok=True)
 
 
+def gh(*args: str, stdin: str | None = None) -> str | None:
+    """Run the GitHub CLI and return its output, or None if it is missing or fails."""
+    if shutil.which("gh") is None:
+        return None
+    r = subprocess.run(["gh", *args], cwd=ROOT, text=True, capture_output=True, input=stdin)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def open_issue(state: dict) -> str:
+    """Open the ticket as a GitHub Issue, or reuse the one an earlier run opened.
+
+    Returns a NOTE line for the lead. The loop runs the same without an issue.
+    """
+    name = state["name"]
+    old = worktree(name) / state["ticket_file"]
+    if old.is_file():
+        m = re.search(r"^Issue: #(\d+)", old.read_text(encoding="utf-8"), flags=re.MULTILINE)
+        if m:
+            state["issue"] = int(m.group(1))
+            return f"NOTE {name}  continues GitHub issue #{state['issue']}"
+    title = f"{name}: {state['ticket'].strip().splitlines()[0][:70]}"
+    body = f"{state['ticket'].strip()}\n\nBranch: `feature/{name}`\n"
+    url = gh("issue", "create", "--title", title, "--body-file", "-", stdin=body)
+    m = re.search(r"/issues/(\d+)\s*$", url or "")
+    if not m:
+        return f"NOTE {name}  no GitHub issue was opened (gh is missing, signed out or refused)"
+    state["issue"] = int(m.group(1))
+    return f"NOTE {name}  opened GitHub issue #{state['issue']}"
+
+
+def issue_comment(state: dict, text: str) -> None:
+    """Add a comment to the ticket's GitHub Issue, if it has one."""
+    if state.get("issue"):
+        gh("issue", "comment", str(state["issue"]), "--body-file", "-", stdin=text)
+
+
 def write_ticket(state: dict, message: str) -> None:
     """Write the ticket and its answers to tickets/<name>.md on the branch and commit it.
 
@@ -105,6 +142,7 @@ def write_ticket(state: dict, message: str) -> None:
         f"# Ticket: {state['name']}",
         "",
         f"Branch: `feature/{state['name']}`",
+        *([f"Issue: #{state['issue']}"] if state.get("issue") else []),
         "",
         "## Request",
         "",
@@ -483,6 +521,9 @@ def advance(state: dict) -> list[str]:
             else word[state["status"]]
         )
         lines.append(f"{first} {name}  {state['reason']}".rstrip())
+        if state["status"] == "failed" and not state.get("failure_posted"):
+            state["failure_posted"] = True
+            issue_comment(state, f"The loop for this ticket failed: {state['reason']}")
     save(state)
     return lines
 
@@ -520,6 +561,7 @@ def cmd_start(name: str) -> None:
         "name": name,
         "ticket": ticket,
         "ticket_file": f"tickets/{name}.md",
+        "issue": None,
         "brief": f"research/feature-{name}.md",
         "plan": f"plans/feature-{name}.md",
         "status": "running",
@@ -542,7 +584,9 @@ def cmd_start(name: str) -> None:
         stage(state, "research", "researcher", "Research this ticket and write the brief."),
         stage(state, "plan", "planner", "Split the ticket into subtasks and write the plan."),
     ]
+    note = open_issue(state)
     write_ticket(state, f"ticket: {name}")
+    print(note)
     print(f"PROJECT {wt}")
     print("\n".join(advance(state)))
 
@@ -558,6 +602,7 @@ def cmd_answer(name: str) -> None:
     state["answers"].append(text)
     state["status"], state["reason"] = "running", ""
     write_ticket(state, f"ticket: {name}, decisions")
+    issue_comment(state, f"Decision recorded:\n\n{text}")
     print("\n".join(advance(state)))
 
 
@@ -608,6 +653,7 @@ def summary(name: str) -> str:
         f"TICKET: {name}",
         f"REQUEST: {state['ticket'].splitlines()[0][:200]}",
         f"BRANCH: feature/{name}",
+        f"ISSUE: {'#' + str(state['issue']) if state.get('issue') else 'none'}",
         f"QA ROUNDS: {state['qa_round']}",
         f"REVIEW ROUNDS: {state['review_round']}",
         f"PR CLASS: {state['pr_class'] or 'not reviewed yet'}",
@@ -665,4 +711,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except BrokenPipeError:  # the reader stopped early, e.g. `| head`; the state is saved
+        sys.stderr.close()

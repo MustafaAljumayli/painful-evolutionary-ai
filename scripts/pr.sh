@@ -61,7 +61,10 @@ git push --quiet -u origin "$branch"
 body="$(mktemp)"
 trap 'rm -f "$body"' EXIT
 if [ -f "$state" ]; then
-  ./scripts/loop.sh summary "$name" >"$body"
+  # "Closes #N" makes GitHub close the ticket's issue when the pull request is merged.
+  issue="$(git show "$branch:tickets/$name.md" 2>/dev/null | sed -n 's/^Issue: #\([0-9][0-9]*\)$/\1/p' | head -n 1)"
+  [ -n "$issue" ] && printf 'Closes #%s\n\n' "$issue" >"$body"
+  ./scripts/loop.sh summary "$name" >>"$body"
   title="$name: $(sed -n 's/^REQUEST: //p' "$body" | cut -c1-60)"
   # The full ticket, as committed on the branch in tickets/<name>.md.
   if git cat-file -e "$branch:tickets/$name.md" 2>/dev/null; then
