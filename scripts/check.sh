@@ -6,6 +6,13 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
+# CLAUDE.md and AGENTS.md carry the same project context under two names.
+# They must stay identical so every tool and every agent reads the same thing.
+if ! cmp -s CLAUDE.md AGENTS.md; then
+  echo "AGENTS.md is out of sync with CLAUDE.md. Run: cp CLAUDE.md AGENTS.md"
+  exit 1
+fi
+
 # A worktree is a fresh checkout with no .venv of its own, so fall back to the
 # main checkout's .venv, then to whatever python3 is on PATH.
 main_root="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"

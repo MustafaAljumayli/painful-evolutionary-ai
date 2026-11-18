@@ -4,7 +4,9 @@
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-extend-exclude = ["third_party", "runs"]
+# Markdown is excluded so ruff never reformats the code samples inside docs,
+# briefs, plans or agent files.
+extend-exclude = ["third_party", "runs", "*.md"]
 
 [tool.ruff.lint]
 # E/W/F: errors and unused code. I: import order. B: likely bugs.
