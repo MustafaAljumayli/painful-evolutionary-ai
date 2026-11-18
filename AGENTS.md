@@ -150,15 +150,19 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 
 ## How features get built
 
-Run `/feature <what to build>` from a feature worktree. It runs the
-researcher -> planner -> executor -> QA loop.
+There are two commands. Both exist for Claude Code (`.claude/commands/`) and
+for Copilot CLI (`.github/skills/`, started with `./scripts/copilot.sh`).
 
-- Claude Code: the loop is `.claude/commands/feature.md`, the agents are in
-  `.claude/agents/`.
-- Copilot CLI: start it with `./scripts/copilot.sh`. The loop is
-  `.github/skills/feature/SKILL.md`, the agents are in `.github/agents/`.
+- `/lead` is the one the user runs, from the main checkout. It takes the
+  tickets (Solo todos), gives each its own worktree and agent, answers the
+  agents' questions where the docs allow, and reports to the user once.
+- `/feature <what to build>` runs inside one feature worktree. It runs the
+  researcher -> planner -> executor -> QA loop and never asks the user
+  anything. When it stops it writes `reports/<branch>.md` with a status of
+  DONE, NEEDS DECISION or FAILED, which the lead reads.
 
-The two sets of agent files carry the same instructions. Change both.
+The agents are in `.claude/agents/` and `.github/agents/`. The two sets
+carry the same instructions. Change both.
 
 ## Research record
 

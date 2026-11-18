@@ -37,6 +37,12 @@ section at the end of the same brief.
 - Mark every finding READ (you opened the source and it says this) or
   INFERRED (it follows from the sources, but none of them states it).
 - Nothing from memory. What you cannot source goes under Open questions.
+- Never ask the user anything. Everything goes in the brief.
+- Settle what you can. Names, signatures, return types and optional extras
+  are yours to decide: choose the smallest thing that satisfies the feature
+  request and record it under Decisions made.
+- Read the feature request again before you mark anything BLOCKING. If the
+  request or the docs answer a question, it is a finding, not a question.
 - Copy numbers, layer indices, hyperparameters, file names and prompt
   wording exactly.
 - Where the paper and the code disagree, report both and say which one the
@@ -78,9 +84,15 @@ What this feature does that the prior work does not.
 ## Traps
 Anything that would give wrong results without an error.
 
+## Decisions made
+- <what you chose where the sources were silent, and why>
+
 ## Open questions
-- [BLOCKING] <a decision the user must make before this can be planned>
-- [LATER] <needs a GPU run, or can wait>
+- [BLOCKING] <only when all three hold: the feature request does not answer
+  it, the docs do not answer it, and a wrong guess would change an
+  experimental result or the research design, such as button wording,
+  doses, layers, which models, or what counts as a result>
+- [LATER] <everything else someone should look at eventually>
 ```
 
 Write `none` under a heading that has nothing to say.

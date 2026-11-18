@@ -6,10 +6,13 @@
 #
 # --autopilot keeps Copilot working until the loop reports done. Remove it
 # if you would rather it hand control back after every turn.
+# --no-ask-user stops agents opening question forms nobody is there to answer.
+# They write their questions to reports/<branch>.md instead.
 # The --allow-url lines are the sites the researcher reads the prior work from.
 exec copilot \
   --autopilot \
   --max-autopilot-continues 20 \
+  --no-ask-user \
   --allow-tool='write' \
   --allow-tool='shell(./scripts/check.sh)' \
   --allow-tool='shell(git add)' \

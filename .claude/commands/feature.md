@@ -11,85 +11,106 @@ yourself and you do not read source files. You work from the plan file and
 the short replies your subagents send back. Wait for each subagent to finish
 before the next step (run it in the foreground, not the background).
 
+Never ask the user a question and never wait for an answer. Decide what you
+can. When you have to stop, follow "Stopping" at the end.
+
 ## 0. Preflight
 
-Run `git branch --show-current`. If it prints `main`, stop and tell me to
-start from a feature worktree. Otherwise take the branch name, replace every
-`/` with `-`, and use:
+Run `git branch --show-current`. If it prints `main`, stop with FAILED.
+Otherwise take the whole branch name and replace every `/` with `-`. For
+branch `feature/analyze` the name is `feature-analyze`, and you use:
 
-- research brief: `research/<name>.md`
-- plan file: `plans/<name>.md`
+- research brief: `research/feature-analyze.md`
+- plan file: `plans/feature-analyze.md`
+- report file: `reports/feature-analyze.md`
 
 ## 1. Research
 
-Call the `researcher` subagent with the feature request and the brief path.
-If its reply lists a BLOCKING question, stop and show me the question.
+Run the `researcher` agent with the feature request and the brief path.
+
+If its reply lists a BLOCKING question, check it yourself before stopping.
+Read the feature request again, then CLAUDE.md, `docs/MVP.md` and
+`docs/PROPOSAL.md`. If any of them answers the question, or the question is
+only about the shape of the code (names, signatures, return types, optional
+extras), settle it: choose the smallest thing that satisfies the request,
+and give the planner your answer as a fact. Stop with NEEDS DECISION only
+for a question none of them answers and that would change an experimental
+result or the research design.
 
 ## 2. Plan
 
-Call the `planner` subagent with the feature request, the brief path and the
-plan file path.
+Run the `planner` agent with the feature request, the brief path, the plan
+file path and any answers from step 1.
 
-If it replies `NEEDS RESEARCH`, call a new `researcher` with that question
-and the brief path, then call the planner again. Do this once per feature.
-If the planner asks a second time, stop and show me its question.
+If it replies `NEEDS RESEARCH`, run a new `researcher` with that question
+and the brief path, then run the planner again. Do this once per feature.
+If the planner asks a second time, stop with NEEDS DECISION.
 
-Read the plan file. If it has a `Needs a human` section, stop and show it to
-me. Otherwise commit the brief and the plan:
+Read the plan file. If it has a `Needs a human` section, stop with NEEDS
+DECISION. Otherwise commit the brief and the plan:
 `git add -- <brief> <plan> && git commit -m "plan: <feature in a few words>" -- <brief> <plan>`
 
 ## 3. Execute
 
-For each subtask, in the plan's order, call the `executor` subagent with the
+For each subtask, in the plan's order, run the `executor` agent with the
 plan file path and the subtask ID. Name it `exec-<ID>`. Run one executor at
 a time: they share this checkout.
 
-Keep a table of subtask ID, executor name and number of QA failures.
+Keep a table of subtask ID, the executor that built it, and its number of
+QA failures.
 
 If an executor replies `BLOCKED`, go to step 6.
 
 ## 4. QA
 
-Call a new `qa` subagent with the plan file path, the brief path and base
-branch `main`. Use a new one every round so it has no memory of earlier
-rounds.
+Run a new `qa` agent with the plan file path, the brief path and base branch
+`main`. Use a new one every round so it has no memory of earlier rounds.
 
 ## 5. Route the verdict
 
 - `VERDICT: PASS`: go to step 7.
-- A subtask failed: add one to its failure count. Send only that subtask's
+- A subtask failed: add one to its failure count. Give only that subtask's
   part of the QA report to the executor that built it, with SendMessage to
   `exec-<ID>`, so it keeps its own context. When every failed subtask has
   been fixed, go back to step 4.
 - A subtask has now failed three times, or INTEGRATION is not `none`:
   go to step 6.
-- UNOWNED CHANGES is not `none`: stop and show me the files.
+- UNOWNED CHANGES is not `none`: stop with FAILED and list the files.
 
 ## 6. Re-plan, once
 
-You may re-plan once per feature. Send the planner the brief path, the plan
-file path and the QA report or the BLOCKED message. Commit the changed plan
-the same way as in step 2. Then run step 3 for the IDs listed in the plan's
-`Changes` section only, with new executors, and go to step 4.
+You may re-plan once per feature. Give the `planner` agent the brief path,
+the plan file path and the QA report or the BLOCKED message. Commit the
+changed plan the same way as in step 2. Then run step 3 for the IDs listed
+in the plan's `Changes` section only, with new executors, and go to step 4.
 
-If you have already re-planned, stop and tell me what is still failing.
+If you have already re-planned, or you reach six QA rounds, stop with
+FAILED.
 
 ## 7. Done
 
-Tell me, in under fifteen lines: the feature, the brief and plan paths, the
-subtask IDs with their commit hashes, how many QA rounds it took, any LATER
-questions from the brief, and the two commands to merge the branch. Do not
-merge and do not push.
+Stop with DONE. Do not merge and do not push.
 
-## When to interrupt me
+## Stopping
 
-Only for these:
+Every time you stop, for any reason, first write the report file in exactly
+this shape. It is not committed.
 
-- a BLOCKING question in the research brief, or a second `NEEDS RESEARCH`
-- a `Needs a human` section, a BLOCKED you cannot re-plan around, or
-  unowned changes
-- the feature still fails after the one re-plan, or after six QA rounds
-- everything passed
+```
+STATUS: DONE | NEEDS DECISION | FAILED
+FEATURE: <the feature in one line>
+BRIEF: <path>
+PLAN: <path, or none>
+COMMITS: <ID and hash for each subtask, or none>
+QA ROUNDS: <number>
+DECISIONS NEEDED:
+1. <question> | options: <a> / <b> | recommended: <one of them>, because <why>
+DETAILS:
+<what is failing, or the LATER questions from the brief, in at most ten lines>
+```
 
-Do not ask me to confirm the brief or the plan, to approve a retry, or what
-to do next.
+Write `none` under DECISIONS NEEDED when there are none. Then give the same
+content as your final reply and end.
+
+If you are later sent answers to your DECISIONS NEEDED, treat them as facts,
+delete the report file, and continue from the step where you stopped.
