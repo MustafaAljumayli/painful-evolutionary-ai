@@ -63,6 +63,11 @@ trap 'rm -f "$body"' EXIT
 if [ -f "$state" ]; then
   ./scripts/loop.sh summary "$name" >"$body"
   title="$name: $(sed -n 's/^REQUEST: //p' "$body" | cut -c1-60)"
+  # The full ticket, as committed on the branch in tickets/<name>.md.
+  if git cat-file -e "$branch:tickets/$name.md" 2>/dev/null; then
+    printf '\n---\n\n' >>"$body"
+    git show "$branch:tickets/$name.md" >>"$body"
+  fi
 else
   {
     echo "TICKET: $name"

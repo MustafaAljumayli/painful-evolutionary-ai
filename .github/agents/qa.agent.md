@@ -43,8 +43,8 @@ branch as it is now.
    `Owns` lists. A failure that belongs to no single subtask, such as two
    subtasks that each work alone and break together, goes under INTEGRATION.
 5. List any changed file that no subtask owns under UNOWNED CHANGES. Files
-   under `plans/` and `research/` do not count: the loop driver commits
-   those. The check script fails when the branch changes a protected path
+   under `plans/`, `research/` and `tickets/` do not count: the loop driver
+   commits those. The check script fails when the branch changes a protected path
    (`environment.yml`, `pyproject.toml`, `scripts/`, `.claude/`, `docs/`,
    `CLAUDE.md` and the rest); never excuse that, whatever the ticket says.
 

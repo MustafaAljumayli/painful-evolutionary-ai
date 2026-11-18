@@ -65,9 +65,10 @@ Rules:
 - Point to the brief; do not copy it into the plan. For each INFERRED
   finding the feature relies on, add its check as a "Done when" outcome.
 - No subtask owns `environment.yml`, `pyproject.toml`, `scripts/`, `.claude/`,
-  `CLAUDE.md`, `AGENTS.md`, `docs/`, `plans/`, `research/` or `third_party/`.
-  Those paths are protected and the check script fails any branch that
-  touches one. If the feature cannot be built without such a change,
+  `CLAUDE.md`, `AGENTS.md`, `docs/`, `plans/`, `research/`, `tickets/` or
+  `third_party/`. The loop driver writes `plans/`, `research/` commits and
+  `tickets/`; the rest are protected and the check script fails any branch
+  that touches one. If the feature cannot be built without such a change,
   including a new dependency, write no plan and report NEEDS HUMAN.
 - If you cannot split the work without something the brief lacks, do not
   guess. Write no plan and report NEEDS RESEARCH.

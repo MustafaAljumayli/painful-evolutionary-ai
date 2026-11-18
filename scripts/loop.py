@@ -72,6 +72,7 @@ def load(name: str) -> dict:
         ("review_round", 0),
         ("needs_publish", False),
         ("pr_class", ""),
+        ("ticket_file", f"tickets/{name}.md"),
     ):
         state.setdefault(key, default)
     return state
@@ -92,6 +93,31 @@ def save(state: dict) -> None:
         )
     else:
         (reports / "next.env").unlink(missing_ok=True)
+
+
+def write_ticket(state: dict, message: str) -> None:
+    """Write the ticket and its answers to tickets/<name>.md on the branch and commit it.
+
+    This is the record of what was asked for. It reaches GitHub with the pull request.
+    """
+    wt = worktree(state["name"])
+    out = [
+        f"# Ticket: {state['name']}",
+        "",
+        f"Branch: `feature/{state['name']}`",
+        "",
+        "## Request",
+        "",
+        state["ticket"].strip(),
+        "",
+    ]
+    if state["answers"]:
+        out += ["## Decisions made while it was built", ""]
+        out += [a.strip() + "\n" for a in state["answers"]]
+    (wt / "tickets").mkdir(exist_ok=True)
+    (wt / state["ticket_file"]).write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+    git("add", "--", state["ticket_file"], cwd=wt, check=False)
+    git("commit", "-m", message, "--", state["ticket_file"], cwd=wt, check=False)
 
 
 def field(text: str, key: str) -> str:
@@ -159,6 +185,7 @@ def render(state: dict) -> str:
         "write only their own stage report.",
         "",
         f"Branch: feature/{state['name']} (base: main)",
+        f"Ticket file: {state['ticket_file']} (committed by the driver; do not edit)",
         f"Brief: {state['brief']}",
         f"Plan: {state['plan']}",
         "",
@@ -492,6 +519,7 @@ def cmd_start(name: str) -> None:
     state = {
         "name": name,
         "ticket": ticket,
+        "ticket_file": f"tickets/{name}.md",
         "brief": f"research/feature-{name}.md",
         "plan": f"plans/feature-{name}.md",
         "status": "running",
@@ -514,6 +542,7 @@ def cmd_start(name: str) -> None:
         stage(state, "research", "researcher", "Research this ticket and write the brief."),
         stage(state, "plan", "planner", "Split the ticket into subtasks and write the plan."),
     ]
+    write_ticket(state, f"ticket: {name}")
     print(f"PROJECT {wt}")
     print("\n".join(advance(state)))
 
@@ -528,6 +557,7 @@ def cmd_answer(name: str) -> None:
         sys.exit("error: give the answers on standard input")
     state["answers"].append(text)
     state["status"], state["reason"] = "running", ""
+    write_ticket(state, f"ticket: {name}, decisions")
     print("\n".join(advance(state)))
 
 
