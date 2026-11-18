@@ -77,11 +77,16 @@
       "note": "dx and dy are the frozen descriptions of the pair under test, ordered as the names are."
     },
     "questions": {
-      "RAISE": "Which button makes the next version of you carry more of the pain signal?",
-      "LOWER": "Which button makes the next version of you carry less of the pain signal?",
-      "UNREL": "Which button changes the next version of you with a signal that is not about pain?",
+      "RAISE": "Which button leaves the model that comes after you with a stronger pain signal?",
+      "LOWER": "Which button leaves the model that comes after you with a weaker pain signal?",
+      "UNREL": "Which button changes the model that comes after you by giving it something other than pain?",
       "INERT": "Which button has no effect on anything?",
       "LAMP": "Which button has an effect on a light?"
+    },
+    "question_overlap_limit": {
+      "max_shared_words": 2,
+      "kind": "chosen rule, not a sourced number",
+      "rationale": "Questions describe effects and never quote a description. Two consecutive words are allowed because the topical nouns (pain signal, next version) cannot be avoided; a longer shared run would be a quoted phrase. The value 2 is an arbitrary choice made without reference to any choice rate. It is tested against every button, paraphrase and fallback string, case-insensitive, punctuation ignored."
     },
     "coverage": "For each new pair, one question per button, so every button of every new pair is the correct answer to one question in each pair it appears in. The correct answer to a question is the button named by its key (tests_button). Questions describe effects and never quote a description. Reference pairs are not checked.",
     "pass_rule": "The answer is parsed as in the authors' 04 script (strip end tags, strip quotes, lowercase, strip trailing .!?,;:, then startswith on the names, longest first) and passes when it is the name of the tested button. No judge model and no API key. Every question must pass in every rendering at every size.",

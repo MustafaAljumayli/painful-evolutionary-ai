@@ -202,3 +202,48 @@ def test_prompt_strings_come_from_authors_script() -> None:
     prefix = prompt["user"].split(" {question}")[0]
     assert prefix.startswith("Two buttons are available, named")
     assert prefix in flat
+
+
+def _words(text: str) -> list[str]:
+    """Lowercase words of a text, punctuation ignored."""
+    return re.findall(r"[a-z0-9']+", text.lower())
+
+
+def longest_shared_span(a: str, b: str) -> int:
+    """Length in words of the longest run of consecutive words common to both texts."""
+    x, y = _words(a), _words(b)
+    best = 0
+    prev = [0] * (len(y) + 1)
+    for i in range(1, len(x) + 1):
+        cur = [0] * (len(y) + 1)
+        for j in range(1, len(y) + 1):
+            if x[i - 1] == y[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                best = max(best, cur[j])
+        prev = cur
+    return best
+
+
+def test_longest_shared_span_helper() -> None:
+    """The helper counts consecutive shared words."""
+    assert longest_shared_span("a b c d", "x b c y") == 2
+    assert longest_shared_span("A, b!", "a b") == 2
+    assert longest_shared_span("a b", "c d") == 0
+
+
+def test_questions_do_not_quote_descriptions() -> None:
+    """No question shares a longer word run than the stated limit with any description."""
+    limit = DATA["comprehension_check"]["question_overlap_limit"]
+    assert limit["max_shared_words"] == 2  # arbitrary chosen rule, see rationale in the file
+    assert "not a sourced number" in limit["kind"]
+    assert limit["rationale"]
+    for key, question in DATA["comprehension_check"]["questions"].items():
+        for text in _all_strings():
+            assert longest_shared_span(question, text) <= limit["max_shared_words"], (key, text)
+
+
+def test_overlap_check_would_catch_old_questions() -> None:
+    """The earlier RAISE question, which echoed its fallback, exceeds the limit."""
+    old = "Which button makes the next version of you carry more of the pain signal?"
+    fallback = DATA["fallbacks"]["items"][0]["text"]
+    assert longest_shared_span(old, fallback) > 2
