@@ -32,4 +32,21 @@ into its own weights. Every agent working in this repo reads this file.
 ## How features get built
 
 Run `/feature <what to build>` from a feature worktree. It runs the
-planner → executor → QA loop defined in `.claude/commands/feature.md`.
+researcher -> planner -> executor -> QA loop.
+
+- Claude Code: the loop is `.claude/commands/feature.md`, the agents are in
+  `.claude/agents/`.
+- Copilot CLI: start it with `./scripts/copilot.sh`. The loop is
+  `.github/skills/feature/SKILL.md`, the agents are in `.github/agents/`.
+
+The two sets of agent files carry the same instructions. Change both.
+
+## Research record
+
+- `docs/` holds the sources the researcher reads first: the MVP plan and a
+  copy of the paper.
+- `research/<branch>.md` is the sourced brief for a feature and
+  `plans/<branch>.md` is its plan. Both are committed on the feature branch
+  and merge with the code.
+- `third_party/Pain-axis` is the authors' code at a pinned commit. Read it,
+  never edit it.

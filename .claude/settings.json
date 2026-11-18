@@ -12,7 +12,18 @@
       "Bash(python3 -m ruff *)",
       "Bash(.venv/bin/python -m ruff *)",
       "Bash(python -m compileall *)",
-      "Bash(python3 -m compileall *)"
+      "Bash(python3 -m compileall *)",
+      "Bash(.venv/bin/python -m pip show *)",
+      "Bash(python3 -m pip show *)",
+      "Bash(git -C third_party/Pain-axis rev-parse *)",
+      "Bash(git -C third_party/Pain-axis log *)",
+      "Bash(git -C third_party/Pain-axis show *)",
+      "Bash(git -C third_party/Pain-axis grep *)",
+      "WebSearch",
+      "WebFetch(domain:arxiv.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:huggingface.co)"
     ],
     "deny": [
       "Bash(git push *)",
