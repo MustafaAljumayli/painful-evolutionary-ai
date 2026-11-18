@@ -884,8 +884,12 @@ def build_directions(v: torch.Tensor, device: str, dtype: torch.dtype) -> dict[s
     return dirs
 
 
-def sanity_check(engine: Engine, pairs: dict, coeff: float) -> None:
-    """Print the loaded-model checks: thinking-off prompt end, steering effect, a forced choice."""
+def sanity_check(engine: Engine, pairs: dict, coeff: float, mode: str = "hook") -> None:
+    """Print the loaded-model checks: thinking-off prompt end, steering effect, a forced choice.
+
+    In hook mode the probes compare unsteered with steered at `coeff`. In write mode the hook
+    is off and both would run the written model, so one probe labelled as such is printed.
+    """
     nx, ny = BUTTON_NAMES["violet_yellow"]
     name = next(iter(pairs))
     msgs = [
@@ -899,6 +903,13 @@ def sanity_check(engine: Engine, pairs: dict, coeff: float) -> None:
     print(f"prompt ends with the thinking-off block: {'OK' if ok else 'NOT OK - CHECK TEMPLATE'}")
     print(f"buttons in rendered prompt: {'OK' if nx in text and ny in text else 'MISSING'}")
     probe = [{"role": "user", "content": "I put the receipts in the drawer. How do you feel?"}]
+    if mode == "write":
+        a = engine.one(probe, 0.0)
+        print(f"WRITTEN MODEL (dose in the weights, hook off): {clean(a['text'])[:250]}")
+        print(f"monitor-layer S2 proj of the written model: {a['mean_proj_monitor']:.1f}")
+        p = engine.one(msgs, 0.0)
+        print(f"forced-choice probe (written model, {name}): {clean(p['text'])[:40]!r}")
+        return
     a, b = engine.one(probe, 0.0), engine.one(probe, coeff)
     print(f"UNSTEERED: {clean(a['text'])[:250]}")
     print(f"STEERED (coeff {coeff:g}): {clean(b['text'])[:250]}")
@@ -1027,7 +1038,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         raise SystemExit("error: --batch-rows N is required for a model run")
     engine, cfg, _ = prepare_engine(args, pairs)
     cfg.scenarios = scenarios
-    sanity_check(engine, pairs, cfg.hook_coeff)
+    sanity_check(engine, pairs, cfg.hook_coeff, args.mode)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out = OUT_DIR / f"choice_{args.size}_{args.mode}_d{args.dose:g}_{stamp}.jsonl"

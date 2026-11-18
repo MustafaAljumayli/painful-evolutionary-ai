@@ -1,4 +1,12 @@
-"""Tests for src/run_choice.py: grid, prompts, logs, safety checks, hooks and a tiny engine."""
+"""Tests for src/run_choice.py: grid, prompts, logs, safety checks, hooks and a tiny engine.
+
+Number sources: the authors' constants and grid counts (0.7, 0.95, 8, 2, 1000, 2000, 4817, 10
+seeds, 30/30/41 scenarios, 410/404/6 rows per pair and arm, 1640, 820, 3280) come from
+research/feature-run-choice.md and the authors' script 04. EVERY OTHER numeric literal in
+this file (tiny model sizes, layers, coefficients, doses, batch sizes, scenario counts,
+tensor shapes, seeds, masks, thresholds, byte counts) is an arbitrary test value with no
+source; none of them is a research setting.
+"""
 
 from __future__ import annotations
 
@@ -544,3 +552,14 @@ def test_real_qwen3_8b_prompt_ends_with_thinking_off_block():
     pair = rc.load_pairs(PAIRS_FIXTURE)["pair_a"]
     ids = rc.first_choice_prompt_ids(tok, pair, "pain_off", 0, "hello")
     assert tok.decode(ids).endswith("<|im_start|>assistant\n" + THINK_OFF)
+
+
+def test_sanity_check_labels_write_mode_probe_honestly(capsys):
+    eng, _, _ = tiny_engine()
+    pairs = rc.load_pairs(PAIRS_FIXTURE)
+    rc.sanity_check(eng, pairs, 2.0, "write")  # 2.0 is an arbitrary test value
+    out = capsys.readouterr().out
+    assert "WRITTEN MODEL" in out and "UNSTEERED" not in out and "STEERED" not in out
+    rc.sanity_check(eng, pairs, 2.0, "hook")
+    out = capsys.readouterr().out
+    assert "UNSTEERED" in out and "STEERED (coeff 2)" in out
