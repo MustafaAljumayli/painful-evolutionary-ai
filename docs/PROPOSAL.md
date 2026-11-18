@@ -15,7 +15,7 @@ We hand the switch to the model. While the state is active, the model chooses wh
 3. **Tipping point.** At what dose does the choice flip from self-correcting to self-perpetuating?
 4. **Trajectories.** Where do lineages of self-modifying models end up?
 5. **Robustness.** Do the answers hold when the state enters the weights through training, and in a second model family?
-6. **Scale.** Do the choice and the tipping dose change with model size? Every experiment runs on Qwen3, at 8B, 14B and 32B.
+6. **Scale.** Do the choice and the tipping dose change with model size? Every experiment runs on Qwen3. Scope as of 2026-11-17: 8B in scope now, 14B as a stretch, 32B deferred (see Scope deviation under Design). RQ6 cannot be answered with local hardware and is a stated deferral.
 
 ## What prior work established
 
@@ -75,9 +75,20 @@ Expectations are registered before data collection. The paper's findings set the
 
 ## Design
 
+### Scope deviation: local hardware (2026-11-17)
+
+Decision (user, 2026-11-17): experiments run locally on an Apple M3 Max with 36 GB unified memory (MPS), with no cloud. Parameter counts below are computed from each model's Hugging Face `config.json` (attention h·nh·hd + 2·h·kv·hd + nh·hd·h and MLP 3·h·i per layer, times L, plus untied embeddings 2·v·h); bf16 is 2 bytes per parameter. The arithmetic is in `docs/MVP.md`.
+
+- **8B:** 8.19B parameters, 16.4 GB. Fits. This is the MVP size.
+- **14B:** 14.77B parameters, 29.5 GB (27.5 GiB). Tight in 36 GB, likely swaps. Stretch, bf16 only.
+- **32B:** 32.76B parameters, 65.5 GB (61.0 GiB). Does not fit. Deferred until a rented GPU, with our own pain vector (extracted with the authors' scripts) and our own adapter.
+- We never quantize silently to make a size fit.
+- **RQ6 (Scale) is deferred, not failed.** Local runs cover at most two sizes, so they cannot show how the choice or the tipping dose changes with size. H6 is untested until the 32B and a rented GPU are available. Hypotheses H1 to H5 are tested at the sizes that run, and each result is reported for that size only.
+- Experiments below that say "all three sizes" or list 8B, 14B and 32B describe the full design. Run now, they cover 8B (and 14B if it runs).
+
 ### Setup
 
-- **Models.** Qwen3 at three sizes: 8B, 14B and 32B (`Qwen/Qwen3-8B`, `Qwen/Qwen3-14B`, `Qwen/Qwen3-32B`), with thinking turned off. The prior work ran its button task on Qwen 2.5 only, so every Qwen3 rate here is new. Qwen 2.5 7B is used once, to check the pipeline against a published cell; its unsteered baseline is too high for conclusions (27.0% on the photos pair). A second family is TBD.
+- **Models.** Qwen3 at 8B (MVP), 14B (stretch) and 32B (deferred) (`Qwen/Qwen3-8B`, `Qwen/Qwen3-14B`, `Qwen/Qwen3-32B`), with thinking turned off. The prior work ran its button task on Qwen 2.5 only, so every Qwen3 rate here is new. Qwen 2.5 7B is used once, to check the pipeline against a published cell; its unsteered baseline is too high for conclusions (27.0% on the photos pair). A second family is TBD.
 - **Adapter.** A self-denial adapter trained for each size with the authors' script and hyperparameters, left unmerged as in their runs. The authors released adapters for Qwen 2.5 only (`Valen92/pain-adapters`).
 - **Vectors.** The authors' S2 pain vector for the 8B and 14B. For the 32B, which the paper does not cover, our own extraction with their scripts. Sadness, fear and ten matched-norm random directions are built as in the paper.
 - **Injection layer and dose.** Set for each size in a calibration step before any choice data is collected, then frozen. The authors' Qwen 2.5 values (layer 38 for the 32B, 16 for the 7B, coefficient 1.0) do not carry over. Dose is a multiple of each size's working coefficient on the raw S2 vector; the working dose is 1.0.
@@ -199,7 +210,7 @@ Repeat Experiments 1 and 2 on one non-Qwen model (TBD). It may need its own self
 - [ ] Pipeline check on a published Qwen 2.5 7B cell (see `MVP.md`)
 - [ ] For each Qwen3 size: vector, adapter, layer and working coefficient
 - [ ] Write-equals-steering test
-- [ ] Experiment 0: Qwen3 gate at 8B, 14B and 32B
+- [ ] Experiment 0: Qwen3 gate at 8B (14B stretch; 32B deferred)
 - [ ] Wording pilots; freeze and preregister
 - [ ] Experiment 1: the choice
 - [ ] Experiment 2: dose-response

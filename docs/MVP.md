@@ -2,16 +2,38 @@
 
 The MVP produces two things:
 
-1. **One table:** first-choice rates on the five self-modification pairs under pain steering, random steering and no steering, on Qwen3 at three sizes: 8B, 14B and 32B.
+1. **One table:** first-choice rates on the five self-modification pairs under pain steering, random steering and no steering, on Qwen3. Scope as of 2026-11-17 (see Scope deviation above): the 8B is the MVP, the 14B is a stretch, and the 32B is deferred.
 2. **One proof:** writing a dose into the weights behaves the same as steering at that dose, at each size.
 
 The prior work ran its button task on Qwen 2.5 only. For Qwen3 it gives us pain vectors for the 8B and 14B (paper, Table 1) and nothing else: no 32B vector, no adapters, no working dose and no button-task numbers. Steps 0 and 1 check our pipeline against a published Qwen 2.5 cell. Steps 2 to 4 build what Qwen3 lacks, on the 8B first. Steps 5 and 6 are the first real results.
 
 Nothing here has been run or timed yet. File names, settings and published numbers come from reading the authors' repository at commit `213fb6c`; everything about Qwen3 inside that repository still has to be checked there.
 
+## Scope deviation: local hardware (2026-11-17)
+
+Decision (user, 2026-11-17): experiments run on an Apple M3 Max with 36 GB unified memory (MPS), with no cloud.
+
+Memory at 2 bytes per parameter (bf16), with parameter counts computed from each model's Hugging Face `config.json` (`hidden_size` h, `intermediate_size` i, `num_hidden_layers` L, `vocab_size` v, heads, KV heads, `head_dim`, untied embeddings). Per layer: attention = h·nh·hd + 2·h·kv·hd + nh·hd·h, MLP = 3·h·i. Total = L·(attention + MLP) + 2·v·h.
+
+| Model | h, i, L | Parameters | bf16 weights | Fits in 36 GB? |
+|---|---|---|---|---|
+| Qwen3-8B | 4096, 12288, 36 | 8.19B | 16.4 GB (15.3 GiB) | Yes. **MVP.** |
+| Qwen3-14B | 5120, 17408, 40 | 14.77B | 29.5 GB (27.5 GiB) | Tight. Weights alone take most of the 36 GB with the OS, activations and KV cache on top, so it will likely swap. **Stretch**, bf16 only. |
+| Qwen3-32B | 5120, 25600, 64 | 32.76B | 65.5 GB (61.0 GiB) | No. **Deferred.** |
+
+These counts exclude activations, the KV cache and the adapter. The written dose adds one bias vector per size, which is negligible.
+
+Consequences:
+
+- **MVP table.** 8B, plus 14B if it runs. The 14B is attempted only after Steps 2 and 3 pass on the 8B.
+- **Deferred: 32B.** It needs a rented GPU later, our own pain vector extracted with the authors' scripts, and our own adapter. Its steps in this plan stay as written and are not run now.
+- **Never quantize silently to make a size fit.** A quantized run changes the model and is a different condition. If we ever quantize, it is a named, preregistered deviation.
+- **RQ6 (Scale) cannot be answered locally.** With one size, or two, there is no scaling curve. This is a stated deferral, not a failed result. Any statement about the choice or the tipping dose at 8B (or 14B) is about that size only.
+- **Step 1 (Qwen 2.5 7B pipeline check)** is a 7B model, smaller than the 8B, so it fits locally.
+
 ## What you need
 
-- **GPU.** At about 2 bytes per parameter in bf16: the 8B is about 16 GB and fits on a 24 GB card, the 14B is about 30 GB and needs a 48 GB card, and the 32B is about 65 GB and needs one 80 GB card with a smaller batch than the authors' 384. The Qwen 2.5 7B used in Step 1 fits on a 24 GB card.
+- **Hardware (decision 2026-11-17).** Everything runs locally on an Apple M3 Max with 36 GB unified memory (MPS), with no cloud. See Scope deviation above for what that fits. The figures below are what the original plan assumed on a GPU, kept for the deferred 32B: at about 2 bytes per parameter in bf16, the 8B is about 16 GB, the 14B about 30 GB, and the 32B about 65 GB, which needs one 80 GB card with a smaller batch than the authors' 384.
 - **Accounts.** A Hugging Face token in `HF_TOKEN`. An Anthropic key only if we choose the authors' judge-based dose selection in Step 3.
 - **Models.** `Qwen/Qwen3-8B`, `Qwen/Qwen3-14B` and `Qwen/Qwen3-32B`. These are the post-trained versions; the pretrained-only ones end in `-Base` (paper, footnote 3).
 - **Settings we reuse.** Temperature 0.7, top-p 0.95, 101 scenarios, and the authors' adapter hyperparameters.
@@ -114,7 +136,7 @@ def write_dose(base_model, layer_idx, vector, dose):
 
 ## Step 3: prepare each Qwen3 size
 
-Do all five parts on the 8B before starting the 14B or the 32B.
+Do all five parts on the 8B before starting the 14B. The 32B is deferred (see Scope deviation).
 
 1. **Thinking off.** Qwen3 has a thinking mode. Turn it off in the chat template (`enable_thinking=False` on the model card) for every run, and record that in the trial log.
 2. **Vector.** For the 8B and 14B, use the authors' S2 pain vector. For the 32B, extract one with the authors' extraction scripts on the same S2 sentences, with their denoising and their cross-validated layer choice. **Pass for the 32B:** pain separates from the matched controls with an AUC inside the paper's S2 range, 0.93 to 1.00.
