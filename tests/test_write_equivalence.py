@@ -48,7 +48,7 @@ def _steer(model: torch.nn.Module, layer: int, v: torch.Tensor, coeff: float) ->
 @pytest.mark.parametrize("dose", TINY_DOSES)
 def test_tiny_model_hook_equals_write(dose: float, return_tuple: bool) -> None:
     """The runner's hook and write_dose give the same top token and near-equal logits."""
-    torch.manual_seed(5)
+    torch.manual_seed(5)  # arbitrary test value
     x = torch.randn(4, 6, HIDDEN)
     v = torch.randn(HIDDEN)
     hooked = make_tiny_model(return_tuple=return_tuple)
