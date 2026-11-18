@@ -1,6 +1,6 @@
 ---
 name: executor
-description: Build stage of a feature loop. Designs and implements exactly one subtask from the plan file, or fixes one subtask that QA failed. A new agent runs each build and each fix.
+description: Build stage of a feature loop. Designs and implements exactly one subtask from the plan file, fixes one subtask that QA failed, or makes the changes a pull-request review asked for. A new agent runs each build and each fix.
 tools: ["read", "search", "edit", "execute"]
 include-custom-instructions: true
 # model: <an ID from /model>   (unset = the session model)
@@ -29,6 +29,13 @@ When your task is a fix, the code already exists and someone else wrote it.
 The QA report that failed the subtask is in the ledger's Log. Read the files
 the subtask owns, fix only what QA lists for that subtask, run the check, and
 make a new commit with the same ID prefix.
+
+When your task is to resolve a review, the reviewer's report is in the
+ledger's Log, with any Answers from the user. You may edit any file a
+subtask in the plan owns. Make each requested change. If you are sure one
+would make the code wrong, do not make it, and say why under RESPONSE: the
+next reviewer reads your reason and decides. Run the check, commit with the
+prefix `review:`, and use `review` as the SUBTASK in your report.
 
 1. Read your subtask in the plan, and `Shared names`. Do not read other
    subtasks' code unless yours depends on them.
@@ -60,6 +67,7 @@ FILES: <files you created or edited>
 DESIGN: <the choices you made that the plan left open, in at most five lines>
 NOT DONE: <anything a "Done when" outcome still lacks, or none>
 NEEDS: <for BLOCKED: what you need, in which file, and why; otherwise none>
+RESPONSE: <when resolving a review: one line per requested change, "done" or the reason it was not made; otherwise none>
 ```
 
 Write one status word, not the list of choices.

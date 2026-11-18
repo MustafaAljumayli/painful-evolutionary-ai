@@ -31,6 +31,8 @@ expect executor effort "$EXECUTOR_EFFORT"
 # errs on the careful side.
 expect qa model "$QA_MODEL_CRITICAL"
 expect qa effort "$QA_EFFORT"
+expect reviewer model "$QA_MODEL_CRITICAL"
+expect reviewer effort "$REVIEWER_EFFORT"
 
 if [ "$status" -ne 0 ]; then
   echo "Change loop.conf and the agent files together (.claude/agents/ and .github/agents/)."

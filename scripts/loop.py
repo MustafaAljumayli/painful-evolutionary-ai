@@ -4,9 +4,15 @@ The lead runs it through scripts/loop.sh from the main checkout:
 
     loop.sh start <name>      prepare the worktree and the ledger (ticket on stdin)
     loop.sh next <name>       read the finished stage's report, decide the next stage
+    loop.sh review <name>     start a review of the feature's pull request
     loop.sh answer <name>     record answers to open questions (stdin) and continue
+    loop.sh approve <name>    the user approves a pull request that was held for them
     loop.sh summary <name>    the loop's result in a few lines
     loop.sh status            one line per loop
+
+A loop builds (research, plan, one build per subtask, QA and fixes) until QA
+passes. Then the lead checks integration and opens the pull request, and a
+reviewer stage approves it or requests changes, which a new executor makes.
 
 Each stage is a new agent with a clean context. It reads reports/ledger.md in its
 worktree, does the stage named under "Now", and writes reports/stages/<stage>.md.
@@ -24,7 +30,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ROLES = {"researcher", "planner", "executor", "qa"}
+TIERED = {"qa", "reviewer"}  # roles whose model depends on what the branch changes
 
 
 # ---------------- small helpers ----------------
@@ -60,7 +66,15 @@ def load(name: str) -> dict:
     path = worktree(name) / "reports" / "state.json"
     if not path.is_file():
         sys.exit(f"error: no loop for {name!r}. Run: ./scripts/loop.sh start {name}")
-    return json.loads(path.read_text(encoding="utf-8"))
+    state = json.loads(path.read_text(encoding="utf-8"))
+    for key, default in (
+        ("qa_passed", False),
+        ("review_round", 0),
+        ("needs_publish", False),
+        ("pr_class", ""),
+    ):
+        state.setdefault(key, default)
+    return state
 
 
 def save(state: dict) -> None:
@@ -86,21 +100,24 @@ def field(text: str, key: str) -> str:
     return m.group(1).strip() if m else ""
 
 
-def stage(state: dict, sid: str, role: str, task: str) -> dict:
-    """Return a new stage with its role's model and effort from loop.conf."""
+def stage(state: dict, sid: str, role: str, task: str, kind: str = "") -> dict:
+    """Return a new stage with its role's model and effort from loop.conf.
+
+    QA and the reviewer get their model when the stage starts, from the branch.
+    """
     c = conf()
-    model = c[f"{role.upper()}_MODEL"] if role != "qa" else qa_model(state["name"])
     return {
         "id": sid,
         "role": role,
         "task": task,
-        "model": model,
+        "kind": kind,
+        "model": "" if role in TIERED else c[f"{role.upper()}_MODEL"],
         "effort": c[f"{role.upper()}_EFFORT"],
     }
 
 
 def qa_model(name: str) -> str:
-    """Return the model QA runs on for this branch (scripts/qa_model.sh decides)."""
+    """Return the model QA and review run on for this branch (scripts/qa_model.sh decides)."""
     r = subprocess.run(
         ["bash", str(ROOT / "scripts" / "qa_model.sh"), "main"],
         cwd=worktree(name),
@@ -295,16 +312,60 @@ def qa_stage(state: dict) -> dict:
 
 
 def after_build(state: dict, text: str, cur: dict) -> None:
-    """Route an executor's report."""
-    if field(text, "STATUS") == "BLOCKED":
+    """Route an executor's report, for a build, a QA fix or a review fix."""
+    blocked = field(text, "STATUS") == "BLOCKED"
+    if cur.get("kind") == "review-fix":
+        if blocked:
+            stop(state, "decision", f"Stage {cur['id']} could not make the review's changes.")
+            state["queue"] = [review_fix(state)]
+        else:
+            state["needs_publish"] = True
+            stop(state, "ready", "The review's changes are made. Publish, then review again.")
+    elif blocked:
         replan(state, f"Stage {cur['id']} is blocked.")
+
+
+def review_fix(state: dict) -> dict:
+    """Return the executor stage that resolves the latest review."""
+    n = state["review_round"]
+    return stage(
+        state,
+        next_id(state, f"review{n}-fix"),
+        "executor",
+        f"Resolve review{n}, whose report is in the Log, together with any Answers. Make "
+        "each requested change, or explain under RESPONSE why one should not be made.",
+        kind="review-fix",
+    )
+
+
+def after_review(state: dict, text: str) -> None:
+    """Route a reviewer's report: approved, changes for the agents, or the user's call."""
+    approve = field(text, "VERDICT") == "APPROVE"
+    state["pr_class"] = field(text, "PR CLASS")
+    n = state["review_round"]
+    if state["pr_class"] != "SMALL":
+        verdict = "approves it" if approve else "requests changes"
+        stop(
+            state,
+            "decision",
+            f"review{n} classes this pull request as architectural and {verdict}.",
+        )
+        state["queue"] = [review_fix(state)]
+    elif approve:
+        stop(state, "approved", "")
+    elif n >= int(conf()["MAX_REVIEW_ROUNDS"]):
+        stop(state, "decision", f"Reviewer and executor have not agreed after {n} review rounds.")
+        state["queue"] = [review_fix(state)]
+    else:
+        state["queue"] = [review_fix(state)]
 
 
 def after_qa(state: dict, text: str, cur: dict) -> None:
     """Route a QA verdict: done, fixes and another round, a re-plan, or failure."""
     c = conf()
     if field(text, "VERDICT") == "PASS":
-        stop(state, "done", "")
+        state["qa_passed"] = True
+        stop(state, "ready", "QA passed. Check integration, open the pull request, then review.")
         return
     unowned = field(text, "UNOWNED CHANGES")
     if unowned and unowned.lower() != "none":
@@ -340,7 +401,7 @@ def after_qa(state: dict, text: str, cur: dict) -> None:
 
 def result_of(role: str, text: str) -> str:
     """Return the one-word result a stage report states, or an empty string."""
-    value = field(text, "VERDICT") if role == "qa" else field(text, "STATUS")
+    value = field(text, "VERDICT") if role in TIERED else field(text, "STATUS")
     return value if re.fullmatch(r"[A-Z][A-Z ]*", value) else ""
 
 
@@ -364,6 +425,9 @@ def advance(state: dict) -> list[str]:
             after_plan(state, text, cur)
         elif cur["role"] == "executor":
             after_build(state, text, cur)
+        elif cur["role"] == "reviewer":
+            lines.append(f"POST {name}")
+            after_review(state, text)
         else:
             after_qa(state, text, cur)
     if state["status"] == "running":
@@ -372,15 +436,26 @@ def advance(state: dict) -> list[str]:
                 stop(state, "failed", "The loop ran out of stages without a QA pass.")
             else:
                 state["current"] = state["queue"].pop(0)
-                if state["current"]["role"] == "qa":  # the branch is complete only now
+                if state["current"]["role"] == "qa":
                     state["qa_round"] += 1
                     state["current"]["id"] = f"qa{state['qa_round']}"
+                if state["current"]["role"] in TIERED:  # the branch is complete only now
                     state["current"]["model"] = qa_model(name)
         if state["current"]:
             lines.append(f"SPAWN {name}-{state['current']['id']}")
     if state["status"] != "running":
-        word = {"done": "DONE", "failed": "FAILED", "decision": "DECISION"}[state["status"]]
-        lines.append(f"{word} {name}  {state['reason']}".rstrip())
+        word = {
+            "ready": "READY",
+            "approved": "APPROVED",
+            "failed": "FAILED",
+            "decision": "DECISION",
+        }
+        first = (
+            "PUBLISH"
+            if state["status"] == "ready" and state["needs_publish"]
+            else word[state["status"]]
+        )
+        lines.append(f"{first} {name}  {state['reason']}".rstrip())
     save(state)
     return lines
 
@@ -426,6 +501,10 @@ def cmd_start(name: str) -> None:
         "current": None,
         "queue": [],
         "qa_round": 0,
+        "qa_passed": False,
+        "review_round": 0,
+        "needs_publish": False,
+        "pr_class": "",
         "fails": {},
         "replanned": False,
         "research_followups": 0,
@@ -452,6 +531,43 @@ def cmd_answer(name: str) -> None:
     print("\n".join(advance(state)))
 
 
+def cmd_review(name: str) -> None:
+    """Start a review round, once the branch is integrated and pushed as it stands."""
+    state = load(name)
+    if state["status"] != "ready":
+        sys.exit(f"error: the loop for {name} is {state['status'].upper()}, not READY")
+    head = git("rev-parse", f"feature/{name}").stdout.strip()
+    ok = ROOT / "reports" / "integration" / f"{name}.ok"
+    if not ok.is_file() or ok.read_text(encoding="utf-8").strip() != head:
+        sys.exit(f"error: run ./scripts/integrate.sh {name} first; it must report OK")
+    pushed = git("rev-parse", "--verify", "--quiet", f"origin/feature/{name}", check=False)
+    if pushed.stdout.strip() != head:
+        sys.exit(f"error: run ./scripts/pr.sh {name} first; the pull request must show this commit")
+    state["review_round"] += 1
+    state["needs_publish"] = False
+    state["status"], state["reason"] = "running", ""
+    state["queue"] = [
+        stage(
+            state,
+            f"review{state['review_round']}",
+            "reviewer",
+            "Review this feature's pull request: the whole branch against main.",
+        )
+    ]
+    print("\n".join(advance(state)))
+
+
+def cmd_approve(name: str) -> None:
+    """Record that the user approved a pull request that was held for them."""
+    state = load(name)
+    if state["status"] != "decision" or not state["review_round"]:
+        sys.exit(f"error: the loop for {name} is not held on a review")
+    state["answers"].append("The user approved the pull request as it stands.")
+    state["queue"] = []
+    stop(state, "approved", "Approved by the user.")
+    print("\n".join(advance(state)))
+
+
 def summary(name: str) -> str:
     """Return the loop's result in a few lines, for the lead's report and the pull request."""
     state = load(name)
@@ -463,6 +579,8 @@ def summary(name: str) -> str:
         f"REQUEST: {state['ticket'].splitlines()[0][:200]}",
         f"BRANCH: feature/{name}",
         f"QA ROUNDS: {state['qa_round']}",
+        f"REVIEW ROUNDS: {state['review_round']}",
+        f"PR CLASS: {state['pr_class'] or 'not reviewed yet'}",
         f"STAGES: {', '.join(h['id'] + '=' + h['result'] for h in state['history']) or 'none'}",
     ]
     if state["reason"]:
@@ -491,7 +609,9 @@ def cmd_status() -> None:
 def main() -> None:
     """Command line entry point."""
     p = argparse.ArgumentParser(description="Feature-loop driver.")
-    p.add_argument("command", choices=["start", "next", "answer", "summary", "status"])
+    p.add_argument(
+        "command", choices=["start", "next", "review", "answer", "approve", "summary", "status"]
+    )
     p.add_argument("name", nargs="?")
     a = p.parse_args()
     if a.command == "status":
@@ -504,8 +624,12 @@ def main() -> None:
         cmd_start(name)
     elif a.command == "next":
         print("\n".join(advance(load(name))))
+    elif a.command == "review":
+        cmd_review(name)
     elif a.command == "answer":
         cmd_answer(name)
+    elif a.command == "approve":
+        cmd_approve(name)
     else:
         print(summary(name))
 

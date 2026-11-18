@@ -200,6 +200,11 @@ context, started by the lead in Solo and named `<ticket>-<stage>`:
 4. **qa1, qa2, ...** (QA): runs the checks, judges whether the tests really
    cover each outcome, and passes or fails each subtask. A failed subtask
    gets a new executor for the fix (`S1-fix1`), then a new QA round.
+5. **review1, review2, ...** (reviewer): once QA passes and the pull
+   request is open, reviews it as a maintainer, approves it or requests
+   changes, and classes it. A small pull request is settled by the agents:
+   a new executor makes the changes (`review1-fix`) and a new reviewer
+   checks them. An architectural one goes to the user.
 
 The stages share one file, `reports/ledger.md` in the worktree: the ticket,
 answers to questions, and what every stage reported. Each agent reads it,
@@ -208,10 +213,11 @@ does the stage named under "Now", and writes its stage report to
 
 `scripts/loop.py` (run as `./scripts/loop.sh`) is the loop driver. It has no
 model in it. It reads each stage report, writes the ledger, applies the
-limits (three QA failures per subtask, one re-plan, six QA rounds) and tells
-the lead which agent to start next. When every loop has ended, the lead runs
-`./scripts/integrate.sh` to check the finished branches together, then
-`./scripts/pr.sh` to open one pull request per feature, and reports once.
+limits (three QA failures per subtask, one re-plan, six QA rounds, three
+review rounds) and tells the lead which agent to start next. When QA has
+passed every loop, the lead runs `./scripts/integrate.sh` to check the
+branches together and `./scripts/pr.sh` to open one pull request per
+feature, starts the reviews, and reports once at the end.
 
 `loop.conf` sets the model and effort of every role, the limits, the
 protected paths, and which files send QA to the stronger model. Solo's two

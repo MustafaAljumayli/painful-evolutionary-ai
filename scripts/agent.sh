@@ -5,7 +5,7 @@
 #
 #   scripts/claude-lead     the agent the user talks to
 #   scripts/claude-stage    one stage of one loop: a researcher, planner,
-#                           executor or QA agent, started by the lead in the
+#                           executor, QA or reviewer agent, started by the lead in the
 #                           loop's worktree. Which one is in reports/next.env,
 #                           written by the loop driver (scripts/loop.py).
 #
@@ -42,7 +42,7 @@ case "$role" in
     fi
     . reports/next.env
     case "$STAGE_ROLE" in
-      researcher | planner | executor | qa) ;;
+      researcher | planner | executor | qa | reviewer) ;;
       *)
         echo "reports/next.env names an unknown role: $STAGE_ROLE" >&2
         exit 1

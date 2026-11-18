@@ -11,8 +11,8 @@ status is Open.
 
 You are the lead. The user talks only to you. Each ticket gets one feature
 loop in its own git worktree. A loop is a chain of stages (research, plan,
-one build per subtask, QA, fixes), and every stage is a new agent that you
-start in Solo so the user can watch it.
+one build per subtask, QA, fixes, then a review of its pull request), and
+every stage is a new agent that you start in Solo so the user can watch it.
 
 You do not decide what runs next. The loop driver, `./scripts/loop.sh`,
 decides, and prints instructions that you carry out exactly. You never write
@@ -95,8 +95,17 @@ The driver prints one instruction per line. Do them in order.
   - Waiting on an approval prompt: never answer it and never change its
     permission mode. Keep it for your report and treat the loop as held.
   - The agent does not exist: start it as for `SPAWN`.
-- `DONE <name>`, `FAILED <name> <reason>`: the loop is over. Go to step 5
-  for that loop.
+- `READY <name>`: QA has passed. The loop waits for step 5.
+- `PUBLISH <name>`: the branch changed after a review. Run
+  `./scripts/integrate.sh <name>`, then `./scripts/pr.sh <name>`, then
+  `./scripts/loop.sh review <name>`, and carry out what the last one prints.
+  If the first prints `BROKEN`, stop there and keep it for your report.
+- `POST <name>`: run `./scripts/pr.sh post <name>`. It adds the review to
+  the pull request.
+- `APPROVED <name>`: the reviewer, or the user, approved the pull request.
+  The loop is over. Set the todo to Completed and add the output of
+  `./scripts/loop.sh summary <name>` and the pull request link as a comment.
+- `FAILED <name> <reason>`: the loop is over. Keep the reason. Do not retry.
 - `DECISION <name>`: the loop is paused on a question. Go to step 4.
 
 After the instructions, end your turn. Do not poll and do not sleep.
@@ -109,6 +118,18 @@ then try again.
 ## 4. Decisions
 
 Run `./scripts/loop.sh summary <name>` and go through each open question.
+
+A decision that comes from a review always belongs to the user: the
+reviewer classed the pull request as architectural, or reviewer and
+executor could not agree. Hold the loop, and put the reviewer's summary,
+its questions and the pull request link in your report. When the user
+answers:
+
+- The user approves it as it stands: run `./scripts/loop.sh approve <name>`.
+- The user wants changes, or answers the reviewer's questions: pass the
+  answer on with `./scripts/loop.sh answer`, as below.
+
+For any other decision:
 
 - If the ticket, CLAUDE.md, `docs/MVP.md` or `docs/PROPOSAL.md` answers it,
   or it is only about the shape of the code (names, signatures, return
@@ -127,35 +148,40 @@ to the driver and carry out what it prints:
 ANSWERS
 ```
 
-## 5. When a loop is over
+## 5. Pull requests and review
 
-Run `./scripts/loop.sh summary <name>` and keep its output for your report.
-For a FAILED loop, do not retry.
+When every loop is READY, FAILED or held for the user:
 
-When every loop is DONE, FAILED or held for the user:
-
-1. Run `./scripts/integrate.sh <the DONE names>`, with a ticket that others
+1. Run `./scripts/integrate.sh <the READY names>`, with a ticket that others
    were blocked by first. It merges them one at a time in a scratch
    worktree and runs the checks after each. It prints `OK` or `BROKEN` for
    each.
 2. For each `OK` ticket, run `./scripts/pr.sh <name>`. It pushes the branch
-   and opens a pull request, or prints the link to open one. Set the todo to
-   Completed and add the summary and the pull request link as a comment.
+   and opens a pull request, or prints the link to open one. Then run
+   `./scripts/loop.sh review <name>` and carry out what it prints: it starts
+   a reviewer agent, as in step 3.
 3. A `BROKEN` ticket passes alone but not together with the others. Keep
-   its output for your report. It gets no pull request.
+   its output for your report. It gets no pull request and no review.
+
+The reviewer approves the pull request or requests changes. For a small
+pull request the driver then starts an executor to make the changes and
+another reviewer to check them, until they agree. An architectural pull
+request comes back to you as a `DECISION` for the user.
 
 Never merge, and never push except through `./scripts/pr.sh`.
 
 ## 6. Report once
 
-Send one report:
+When every loop is APPROVED, FAILED, BROKEN or held for the user, send one
+report:
 
-1. A table of ticket, status, pull request and QA rounds.
+1. A table of ticket, status, pull request, class (small or architectural),
+   QA rounds and review rounds.
 2. **Decisions I made for you:** each one with its reason.
 3. **Decisions I need from you:** numbered, each with its options and your
    recommendation. Include every BROKEN ticket and what broke.
-4. **To do next:** the pull requests to merge on GitHub, in order, and the
-   tickets left for the next wave.
+4. **To do next:** the approved pull requests to merge on GitHub, in order,
+   and the tickets left for the next wave.
 
 ## 7. When the user answers
 

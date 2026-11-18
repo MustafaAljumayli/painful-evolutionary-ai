@@ -1,26 +1,46 @@
 #!/usr/bin/env bash
-# Opens a pull request for one finished feature.
+# Opens, or updates, the pull request for one feature.
 #
-#   ./scripts/pr.sh <name>
+#   ./scripts/pr.sh <name>          push the branch and open its pull request
+#   ./scripts/pr.sh post <name>     add the latest review to the pull request
 #
 # It refuses unless ./scripts/integrate.sh reported OK for exactly this commit
-# and, when the loop driver ran the feature, the loop is DONE. It pushes only
+# and, when the loop driver ran the feature, QA has passed. It pushes only
 # feature/<name>. It never pushes main and never merges: the user merges the
 # pull request on GitHub.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+mode="open"
+if [ "${1:-}" = "post" ]; then
+  mode="post"
+  shift
+fi
 name="${1:-}"
 if [ -z "$name" ]; then
-  echo "usage: ./scripts/pr.sh <name>"
+  echo "usage: ./scripts/pr.sh [post] <name>"
   exit 2
 fi
 branch="feature/$name"
 state="../pea-$name/reports/state.json"
 ok="reports/integration/$name.ok"
+have_gh() { command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; }
+
+if [ "$mode" = "post" ]; then
+  review="$(ls "../pea-$name/reports/stages/" 2>/dev/null | grep -E '^review[0-9]+\.md$' | sort -V | tail -n 1)"
+  if [ -z "$review" ]; then
+    echo "NOTHING $name  there is no review to post"
+  elif have_gh; then
+    gh pr comment "$branch" --body-file "../pea-$name/reports/stages/$review" >/dev/null
+    echo "POSTED $name  ${review%.md}"
+  else
+    echo "NOT POSTED $name  gh is not installed or not signed in; the review is in the ledger"
+  fi
+  exit 0
+fi
 
 git rev-parse --verify --quiet "$branch" >/dev/null || { echo "REFUSED $name  there is no branch $branch"; exit 1; }
-if [ -f "$state" ] && ! grep -q '"status": "done"' "$state"; then
-  echo "REFUSED $name  its loop is not DONE"
+if [ -f "$state" ] && ! grep -q '"qa_passed": true' "$state"; then
+  echo "REFUSED $name  QA has not passed it"
   exit 1
 fi
 if [ ! -f "$ok" ] || [ "$(cat "$ok")" != "$(git rev-parse "$branch")" ]; then
@@ -53,11 +73,12 @@ else
 fi
 printf '\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n' >>"$body"
 
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+if have_gh; then
   url="$(gh pr view "$branch" --json url --jq .url 2>/dev/null || true)"
   if [ -z "$url" ]; then
     url="$(gh pr create --base main --head "$branch" --title "$title" --body-file "$body")"
   fi
+  echo "$url" >"reports/integration/$name.pr"
   echo "PR $name  $url"
 else
   web="$(git remote get-url origin | sed -e 's#^git@github.com:#https://github.com/#' -e 's#\.git$##')"
