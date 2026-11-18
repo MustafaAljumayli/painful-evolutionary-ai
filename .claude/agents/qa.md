@@ -2,6 +2,7 @@
 name: qa
 description: Runs the project checks and reviews the whole feature branch against the plan and CLAUDE.md. Reports pass or fail per subtask ID. Never fixes anything.
 model: opus
+effort: high
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -13,7 +14,10 @@ branch (usually `main`).
 
 1. Run `./scripts/check.sh` and keep its output.
 2. Run `git log --oneline <base>..HEAD` and `git diff --stat <base>...HEAD`.
-   Commit messages start with the subtask ID.
+   Commit messages start with the subtask ID. Review from the diff. When you
+   need to know what a changed function reaches, run
+   `./scripts/graph.sh affected "<path>::<name>()"` and open only what it
+   lists.
 3. For each subtask in the plan, decide pass or fail:
    - every "Done when" outcome is met, and you checked it yourself
    - a test exists that would fail if that outcome were broken. The plan

@@ -145,6 +145,11 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 - Check everything: `./scripts/check.sh`. It compiles, lints, checks formatting
   and runs the fast tests. "It compiles" means this script exits 0.
 - One test file: `python -m pytest tests/test_<module>.py -q`
+- Find code before you read it: `./scripts/graph.sh explain "<path>::<name>()"`
+  shows a symbol and what uses it, `./scripts/graph.sh query "<words>"` lists
+  files and lines for a topic. It covers `src/`, `tests/` and the authors'
+  scripts, and is built locally with no model calls.
+- What earlier research established: `./scripts/facts.sh <word> <word>`
 - Auto-format: `python -m ruff format .`
 
 ## Standards
@@ -174,16 +179,18 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 There are two commands. Both exist for Claude Code (`.claude/commands/`) and
 for Copilot CLI (`.github/skills/`, started with `./scripts/copilot.sh`).
 
-- `/lead` is the one the user runs, from the main checkout. It takes the
-  tickets (Solo todos), gives each its own worktree and loop agent, answers
+- `/lead` is the one the user runs, from the main checkout, in a new lead
+  for each wave of tickets. It takes the tickets (Solo todos), groups small
+  or related ones, gives each group its own worktree and loop agent, answers
   the loops' questions where the docs allow, and reports to the user once.
 - `/feature <what to build>` runs inside one feature worktree and never asks
   the user anything. Its roles, in order:
-  1. **Researcher** reads the paper, the authors' code and the docs, and
-     writes a sourced brief to `research/<branch>.md`.
+  1. **Researcher** starts from what earlier briefs established, reads the
+     paper, the authors' code and the docs, and writes a sourced brief to
+     `research/<branch>.md`.
   2. **Planner** only splits the work into subtasks in `plans/<branch>.md`:
-     IDs, owned files, a goal and acceptance outcomes, in at most 60 lines.
-     It does not design anything.
+     IDs, owned files, a goal and acceptance outcomes, in at most 60 lines
+     and three subtasks. It does not design anything.
   3. **Executors** design and build. Each subtask gets its own executor
      agent, started in Solo under that worktree's project, working from the
      brief and its subtask.
@@ -194,6 +201,11 @@ for Copilot CLI (`.github/skills/`, started with `./scripts/copilot.sh`).
 
 The agents are in `.claude/agents/` and `.github/agents/`. The two sets
 carry the same instructions. Change both.
+
+`loop.conf` sets the model and effort of every role, and which files send
+QA to the stronger model. `scripts/agent.sh` starts the lead, a loop and an
+executor from it; Solo's agent tools `Claude lead`, `Claude loop` and
+`Claude executor` are `bash scripts/agent.sh <role>`.
 
 ## Research record
 

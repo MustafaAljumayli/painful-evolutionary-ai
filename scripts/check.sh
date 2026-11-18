@@ -34,6 +34,9 @@ fail=0
 echo "== dependencies"
 "$PY" scripts/check_deps.py || fail=1
 
+echo "== loop config"
+bash scripts/check_loop.sh || fail=1
+
 echo "== paper text"
 ./scripts/paper.sh check || fail=1
 

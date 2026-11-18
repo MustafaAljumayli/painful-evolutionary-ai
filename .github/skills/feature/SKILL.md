@@ -46,8 +46,9 @@ Run the `planner` agent with the feature request, the brief path, the plan
 file path and any answers from step 1.
 
 The plan is a list of subtasks, not a design. If the plan file is longer
-than 60 lines, or tells an executor how to build something, send it back to
-the planner once and tell it to remove everything an executor can decide.
+than 60 lines, has more than three subtasks, or tells an executor how to
+build something, send it back to the planner once and tell it to merge
+subtasks and remove everything an executor can decide.
 
 If it replies `NEEDS RESEARCH`, run a new `researcher` with that question
 and the brief path, then run the planner again. Do this once per feature.
@@ -88,9 +89,15 @@ mode. If one is stuck on a prompt, stop with NEEDS DECISION.
 
 ## 4. QA
 
+Run `./scripts/qa_model.sh main`. It prints the model this branch needs:
+the stronger one when the branch changes a file that decides an experimental
+result, the cheaper one otherwise. Run it again every round.
+
 Run a new `qa` agent with the plan file path, the brief path and base branch
-`main`. Use a new one every round so it has no memory of earlier rounds.
-Save its reply, word for word, to `reports/qa-<round number>.md`.
+`main`. If you can choose the model for a custom agent, use the stronger
+model you have when the script printed `opus`. Use a new one every round so it has no
+memory of earlier rounds. Save its reply, word for word, to
+`reports/qa-<round number>.md`, and write the model under it.
 
 ## 5. Route the verdict
 

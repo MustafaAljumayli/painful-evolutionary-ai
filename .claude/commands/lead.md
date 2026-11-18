@@ -10,13 +10,21 @@ If no tickets are named above, run every Solo todo in this project whose
 status is Open.
 
 You are the lead. The user talks only to you. You run one feature loop per
-ticket, each in its own git worktree with its own agent, and you report to
-the user once: when every ticket is finished, has failed, or needs a
-decision that only the user can make.
+group of tickets, each in its own git worktree with its own agent, and you
+report to the user once: when every ticket is finished, has failed, or
+needs a decision that only the user can make.
 
 You never write or edit code, and you never edit a file inside a worktree.
 You prepare worktrees, start agents, read their reports and answer their
-questions.
+questions. The report files are your input: do not read briefs, plans,
+diffs or source.
+
+You run one wave, the tickets you were started with. Once you have sent the
+final report and passed on the user's answers, you are finished. If the user
+then gives you new tickets, do not start them. Tell the user to close this
+agent and start a new `Claude lead`: a new lead costs far less than a long
+conversation, and nothing is lost, because the todos, branches and report
+files hold all the state.
 
 ## 0. Preflight
 
@@ -25,30 +33,48 @@ questions.
 - Check that you have Solo's tools for projects, todos, agents and timers.
   If you do not, stop and tell the user to connect Solo to this agent tool
   under Settings > Agents > Agent tools, then start you again.
-- Check that Solo has an agent tool named `Claude executor`. Each feature loop
-  starts its executors with it. If it is missing, stop and tell the user to
-  add it under Settings > Agents > Agent tools > Add tool, with Name
-  `Claude executor`, Command `claude` and Default arguments `--agent executor`.
+- Check that Solo has agent tools named `Claude loop` and `Claude executor`.
+  You start each feature loop with the first, and each loop starts its
+  executors with the second. If either is missing, stop and tell the user
+  to add it under Settings > Agents > Agent tools > Add tool, with Command
+  `bash` and Default arguments `<full path of this checkout>/scripts/agent.sh loop`
+  or the same path followed by `executor`.
 - Run `./scripts/check.sh`. It must pass on `main` before anything starts.
   If it fails, stop and show the user its output.
 
-## 1. Read the tickets
+## 1. Read the tickets and group them
 
 A ticket is a Solo todo. Its title is the feature's short name, such as
 `analyze`. Its notes are the feature request. Drop a leading `/feature`
 from the notes if there is one.
 
-If two tickets clearly need to create or edit the same file, do not run
+Every loop costs a research brief, a plan, at least one executor and a QA
+pass, however small its ticket. Run as few loops as the wave has separate
+pieces of work:
+
+- Put tickets in one loop when they edit the same module, when one only
+  makes sense together with another, or when a ticket is too small to stand
+  alone: it only checks or records a fact, or it changes a few lines in one
+  file.
+- Keep tickets apart when they touch unrelated modules. Never put more than
+  three tickets in one loop.
+- A combined loop takes the name of its main ticket. Its feature request is
+  each ticket's title followed by its notes, one after another.
+- Do not ask the user about grouping. List it in your report under the
+  decisions you made. Wherever a step below sets a todo's status, set it on
+  every ticket in the group.
+
+If two loops would still need to create or edit the same file, do not run
 them together. Run the first, mark the second as blocked by it in Solo,
 and say so in your report.
 
-Each ticket uses one loop agent plus one executor agent per subtask. If
-Solo refuses to start an agent because of its process limit, run fewer
-tickets at once and start the rest as others finish.
+Each loop uses one loop agent plus one executor agent per subtask. If Solo
+refuses to start an agent because of its process limit, run fewer loops at
+once and start the rest as others finish.
 
-## 2. Prepare a worktree per ticket
+## 2. Prepare a worktree per loop
 
-For a ticket named `<name>` the worktree is `../pea-<name>` on branch
+For a loop named `<name>` the worktree is `../pea-<name>` on branch
 `feature/<name>`.
 
 - If it does not exist: `git worktree add ../pea-<name> -b feature/<name>`
@@ -61,14 +87,14 @@ For a ticket named `<name>` the worktree is `../pea-<name>` on branch
 - Make sure the folder is a project in Solo. Add it if it is not. Solo
   links it to this project.
 
-## 3. Start one agent per ticket
+## 3. Start one agent per loop
 
-In each worktree's Solo project, start an agent with the same agent tool
-you are running in. Name it `loop-<name>`.
+In each worktree's Solo project, start an agent with the agent tool
+`Claude loop`. Name it `loop-<name>`.
 
 A new agent ignores input until its startup screen has gone. Wait until it
 is idle at its input prompt, then send it one message: `/feature ` followed
-by the ticket's notes. Read its output afterwards. If your message is
+by the feature request. Read its output afterwards. If your message is
 sitting unsent in its input box, send Enter once. Do not move on until the
 agent is working. Then set the todo to In progress.
 
@@ -115,11 +141,12 @@ If any agent is still working, go back to step 4.
 
 When every ticket is DONE, FAILED or held for the user, send one report:
 
-1. A table of ticket, status, commits and QA rounds.
-2. **Decisions I made for you:** each one with its reason.
+1. A table of ticket, loop, status, commits and QA rounds.
+2. **Decisions I made for you:** each one with its reason, starting with
+   how you grouped the tickets.
 3. **Decisions I need from you:** numbered, each with its options and your
    recommendation.
-4. For the DONE tickets, the commands to merge them one at a time, each
+4. For the DONE loops, the commands to merge them one at a time, each
    followed by `./scripts/check.sh`.
 
 Do not merge and do not push.

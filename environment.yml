@@ -22,5 +22,7 @@ dependencies:
       # needed for every real-model run. Resolved together with torch 2.15.0.
       - transformers==5.23.0
       - accelerate==1.16.0
+      # The code map behind scripts/graph.sh. Local syntax-tree indexing only.
+      - graphifyy==0.9.112
       - pytest==9.2.0
       - ruff==0.17.5

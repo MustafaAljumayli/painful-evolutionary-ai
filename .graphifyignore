@@ -1,0 +1,16 @@
+# The code map (scripts/graph.sh) indexes code only. Data, results and prose
+# are left out: they would cost model calls to index and are read directly.
+*.json
+*.jsonl
+*.csv
+*.md
+*.txt
+*.pdf
+*.pt
+*.html
+docs/
+research/
+plans/
+reports/
+prereg/
+graphify-out/

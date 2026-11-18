@@ -2,7 +2,8 @@
 name: executor
 description: Designs and implements exactly one subtask from the plan file, and fixes that same subtask when QA sends a failure back. Runs as its own agent, one per subtask.
 model: sonnet
-disallowedTools: Agent, AskUserQuestion
+effort: medium
+tools: Read, Write, Edit, Grep, Glob, Bash
 hooks:
   Stop:
     - hooks:
@@ -21,7 +22,12 @@ Later messages may carry a QA failure for the same subtask.
    subtasks' code unless yours depends on them.
 2. Read the parts of the brief your subtask's `Read` line names, and always
    its Traps. Where the brief cites the paper or the authors' code and the
-   detail matters to your design, open that source and read it yourself.
+   detail matters to your design, open that source at the cited lines and
+   read it yourself. To find anything else in the code, ask the code map
+   before you grep or open files: `./scripts/graph.sh explain
+   "<path>::<name>()"` shows one symbol and what uses it, and
+   `./scripts/graph.sh affected "<path>::<name>()"` shows what a change to
+   it reaches.
 3. Decide the design. Keep it as small as the subtask's Goal allows.
 4. Create or edit only the files your subtask owns. Match `Shared names`
    exactly.
