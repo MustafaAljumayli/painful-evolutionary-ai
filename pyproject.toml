@@ -1,0 +1,23 @@
+# Tool settings only. The coding standards live here, in config a script
+# enforces, so an agent cannot skip them the way it can skip a prompt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["third_party", "runs"]
+
+[tool.ruff.lint]
+# E/W/F: errors and unused code. I: import order. B: likely bugs.
+# UP: modern syntax. D103: public functions need a docstring.
+# ANN001/ANN201: public functions need argument and return type hints.
+select = ["E", "W", "F", "I", "B", "UP", "D103", "ANN001", "ANN201"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D103", "ANN001", "ANN201"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "gpu: needs a GPU or a model download; scripts/check.sh skips these",
+]

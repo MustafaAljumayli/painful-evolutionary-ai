@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(./scripts/check.sh)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(.venv/bin/python -m pytest *)",
+      "Bash(python -m ruff *)",
+      "Bash(python3 -m ruff *)",
+      "Bash(.venv/bin/python -m ruff *)",
+      "Bash(python -m compileall *)",
+      "Bash(python3 -m compileall *)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Edit(third_party/**)"
+    ]
+  }
+}
