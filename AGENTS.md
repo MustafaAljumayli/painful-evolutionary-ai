@@ -180,17 +180,18 @@ There are two commands. Both exist for Claude Code (`.claude/commands/`) and
 for Copilot CLI (`.github/skills/`, started with `./scripts/copilot.sh`).
 
 - `/lead` is the one the user runs, from the main checkout, in a new lead
-  for each wave of tickets. It takes the tickets (Solo todos), groups small
-  or related ones, gives each group its own worktree and loop agent, answers
-  the loops' questions where the docs allow, and reports to the user once.
+  for each wave of tickets. It takes the tickets (Solo todos), gives each
+  its own worktree and loop agent, answers the loops' questions where the
+  docs allow, and reports to the user once. A ticket is a whole feature;
+  the lead never combines or splits tickets.
 - `/feature <what to build>` runs inside one feature worktree and never asks
   the user anything. Its roles, in order:
   1. **Researcher** starts from what earlier briefs established, reads the
      paper, the authors' code and the docs, and writes a sourced brief to
      `research/<branch>.md`.
   2. **Planner** only splits the work into subtasks in `plans/<branch>.md`:
-     IDs, owned files, a goal and acceptance outcomes, in at most 60 lines
-     and three subtasks. It does not design anything.
+     IDs, owned files, a goal and acceptance outcomes, in at most 60 lines.
+     It does not design anything.
   3. **Executors** design and build. Each subtask gets its own executor
      agent, started in Solo under that worktree's project, working from the
      brief and its subtask.
@@ -205,7 +206,8 @@ carry the same instructions. Change both.
 `loop.conf` sets the model and effort of every role, and which files send
 QA to the stronger model. `scripts/agent.sh` starts the lead, a loop and an
 executor from it; Solo's agent tools `Claude lead`, `Claude loop` and
-`Claude executor` are `bash scripts/agent.sh <role>`.
+`Claude executor` run `scripts/claude-lead`, `scripts/claude-loop` and
+`scripts/claude-executor`.
 
 ## Research record
 

@@ -43,12 +43,12 @@ behaviour, no bodies. Write `none` if nothing is shared.
 
 Rules:
 
-- One subtask is the default. Every subtask starts a new executor, which
-  reads the project context, the plan and the brief again, so a small
-  subtask costs more than it saves.
-- Add a second or third subtask only when all three hold: it owns different
-  files, it can be finished without seeing the other's code, and it is a
-  module with tests of its own. Never write more than three.
+- Use as many subtasks as the work has separable pieces, and no more. Split
+  where two pieces own different files and one can be finished without
+  seeing the other's code. A large feature may need several subtasks; a
+  small one needs one.
+- Every subtask starts a new executor, which reads the project context, the
+  plan and the brief again. Never split a piece only to make it smaller.
 - A helper, fixture or data file that one subtask's code or tests need
   belongs to that subtask. It is never a subtask of its own.
 - Each file is owned by exactly one subtask. Tests belong to the subtask

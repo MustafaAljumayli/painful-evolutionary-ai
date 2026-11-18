@@ -46,9 +46,8 @@ Run the `planner` agent with the feature request, the brief path, the plan
 file path and any answers from step 1.
 
 The plan is a list of subtasks, not a design. If the plan file is longer
-than 60 lines, has more than three subtasks, or tells an executor how to
-build something, send it back to the planner once and tell it to merge
-subtasks and remove everything an executor can decide.
+than 60 lines, or tells an executor how to build something, send it back to
+the planner once and tell it to remove everything an executor can decide.
 
 If it replies `NEEDS RESEARCH`, run a new `researcher` with that question
 and the brief path, then run the planner again. Do this once per feature.

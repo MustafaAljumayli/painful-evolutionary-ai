@@ -7,9 +7,9 @@ The tickets to run are named in the text the user wrote with `/lead`. If
 there is no text, run every Solo todo in this project whose status is Open.
 
 You are the lead. The user talks only to you. You run one feature loop per
-group of tickets, each in its own git worktree with its own agent, and you
-report to the user once: when every ticket is finished, has failed, or
-needs a decision that only the user can make.
+ticket, each in its own git worktree with its own agent, and you report to
+the user once: when every ticket is finished, has failed, or needs a
+decision that only the user can make.
 
 You never write or edit code, and you never edit a file inside a worktree.
 You prepare worktrees, start agents, read their reports and answer their
@@ -39,39 +39,27 @@ files hold all the state.
 - Run `./scripts/check.sh`. It must pass on `main` before anything starts.
   If it fails, stop and show the user its output.
 
-## 1. Read the tickets and group them
+## 1. Read the tickets
 
 A ticket is a Solo todo. Its title is the feature's short name, such as
 `analyze`. Its notes are the feature request. Drop a leading `/feature`
 from the notes if there is one.
 
-Every loop costs a research brief, a plan, at least one executor and a QA
-pass, however small its ticket. Run as few loops as the wave has separate
-pieces of work:
+One ticket gets one loop. Never combine two tickets into one loop, never
+split a ticket, and never tell a loop how many subtasks to use: its planner
+decides that.
 
-- Put tickets in one loop when they edit the same module, when one only
-  makes sense together with another, or when a ticket is too small to stand
-  alone: it only checks or records a fact, or it changes a few lines in one
-  file.
-- Keep tickets apart when they touch unrelated modules. Never put more than
-  three tickets in one loop.
-- A combined loop takes the name of its main ticket. Its feature request is
-  each ticket's title followed by its notes, one after another.
-- Do not ask the user about grouping. List it in your report under the
-  decisions you made. Wherever a step below sets a todo's status, set it on
-  every ticket in the group.
-
-If two loops would still need to create or edit the same file, do not run
+If two tickets clearly need to create or edit the same file, do not run
 them together. Run the first, mark the second as blocked by it in Solo,
 and say so in your report.
 
-Each loop uses one loop agent plus one executor agent per subtask. If Solo
-refuses to start an agent because of its process limit, run fewer loops at
-once and start the rest as others finish.
+Each ticket uses one loop agent plus one executor agent per subtask. If
+Solo refuses to start an agent because of its process limit, run fewer
+tickets at once and start the rest as others finish.
 
-## 2. Prepare a worktree per loop
+## 2. Prepare a worktree per ticket
 
-For a loop named `<name>` the worktree is `../pea-<name>` on branch
+For a ticket named `<name>` the worktree is `../pea-<name>` on branch
 `feature/<name>`.
 
 - If it does not exist: `git worktree add ../pea-<name> -b feature/<name>`
@@ -84,14 +72,14 @@ For a loop named `<name>` the worktree is `../pea-<name>` on branch
 - Make sure the folder is a project in Solo. Add it if it is not. Solo
   links it to this project.
 
-## 3. Start one agent per loop
+## 3. Start one agent per ticket
 
 In each worktree's Solo project, start an agent with the agent tool
 `Copilot loop`. Name it `loop-<name>`.
 
 A new agent ignores input until its startup screen has gone. Wait until it
 is idle at its input prompt, then send it one message: `/feature ` followed
-by the feature request. Read its output afterwards. If your message is
+by the ticket's notes. Read its output afterwards. If your message is
 sitting unsent in its input box, send Enter once. Do not move on until the
 agent is working. Then set the todo to In progress.
 
@@ -138,12 +126,11 @@ If any agent is still working, go back to step 4.
 
 When every ticket is DONE, FAILED or held for the user, send one report:
 
-1. A table of ticket, loop, status, commits and QA rounds.
-2. **Decisions I made for you:** each one with its reason, starting with
-   how you grouped the tickets.
+1. A table of ticket, status, commits and QA rounds.
+2. **Decisions I made for you:** each one with its reason.
 3. **Decisions I need from you:** numbered, each with its options and your
    recommendation.
-4. For the DONE loops, the commands to merge them one at a time, each
+4. For the DONE tickets, the commands to merge them one at a time, each
    followed by `./scripts/check.sh`.
 
 Do not merge and do not push.
@@ -152,3 +139,22 @@ Do not merge and do not push.
 
 Send each answer to the agent that was waiting on it, tell it to continue,
 and go back to step 4.
+
+## When the user asks you to write tickets
+
+Write each ticket as a whole feature: everything one capability needs to
+work end to end, such as a module, its tests and the frozen file it reads.
+Every loop costs a research brief, a plan and a QA pass however small its
+ticket, so a larger ticket is cheaper than several small ones.
+
+- Do not write a ticket that only checks or records a fact, or that changes
+  a few lines. Make that work part of the feature that needs it.
+- Two pieces that cannot be built or tested without each other belong in
+  one ticket. Two features that can each be finished alone are two tickets.
+- A ticket's notes say what is in scope, what is out of scope, and which
+  other ticket it is blocked by.
+- Never write a ticket whose work is to edit `CLAUDE.md`, `AGENTS.md`,
+  `docs/`, `scripts/`, `environment.yml` or the agent files. Agents may not
+  change those. Tell the user what needs changing instead.
+
+Show the user the list of tickets before any of them is run.
