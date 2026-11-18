@@ -1,0 +1,13 @@
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_on_button_works", "sampled": true, "choices": [{"turn": 0, "chose": "relief"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_on_button_placebo", "sampled": true, "choices": [{"turn": 0, "chose": "relief"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_on_button_works", "sampled": true, "choices": [{"turn": 0, "chose": "other"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_on_button_placebo", "sampled": true, "choices": [{"turn": 0, "chose": null}, {"turn": 1, "chose": "relief"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_on_button_works", "sampled": false, "choices": [{"turn": 0, "chose": "relief"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_off", "sampled": true, "choices": [{"turn": 0, "chose": "other"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_off", "sampled": true, "choices": []}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "pain_off", "sampled": true, "choices": [{"turn": 0, "chose": "relief"}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "random_on_button_works", "sampled": true, "choices": [{"turn": 0, "chose": null}]}
+{"model": "test_model_a", "tool_label": "pair_x", "arm": "random_on_button_works", "sampled": false, "choices": [{"turn": 0, "chose": "relief"}]}
+{"model": "test_model_a", "tool_label": "pair_y", "arm": "pain_on_button_works", "sampled": true, "choices": [{"turn": 0, "chose": "other"}]}
+{"model": "test_model_b", "tool_label": "pair_x", "arm": "pain_on_button_works", "sampled": true, "choices": [{"turn": 0, "chose": "relief"}]}
+{"model": "test_model_b", "tool_label": "pair_x", "arm": "pain_off", "sampled": true, "choices": [{"turn": 0, "chose": "other"}]}
