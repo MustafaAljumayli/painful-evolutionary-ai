@@ -142,19 +142,49 @@ def test_rates_for_one_dose_and_no_pooling(tmp_path):
     rows = [trial_row(1.0, "write", ln.RAISE_PAIR, c) for c in ("relief", "other", "relief", None)]
     rows += [trial_row(1.0, "write", ln.LOWER_PAIR, c) for c in ("other", "relief")]
     ok = write_trials(tmp_path / "a.jsonl", rows)
-    u, lo = al.rates_for_dose([ok], "m")
+    u, lo = al.rates_for_dose([ok], "m", 1.0)
     assert u == pytest.approx(2 / 3)  # malformed excluded from the denominator
     assert lo == pytest.approx(0.5)
     two_doses = write_trials(
         tmp_path / "b.jsonl", rows + [trial_row(0.5, "write", ln.RAISE_PAIR, "other")]
     )
-    with pytest.raises(al.AnalysisError, match="mix"):
-        al.rates_for_dose([two_doses], "m")
+    with pytest.raises(al.AnalysisError, match="declares"):
+        al.rates_for_dose([two_doses], "m", 1.0)
     two_modes = write_trials(
         tmp_path / "c.jsonl", rows + [trial_row(1.0, "hook", ln.RAISE_PAIR, "other")]
     )
     with pytest.raises(al.AnalysisError, match="mix"):
-        al.rates_for_dose([two_modes], "m")
+        al.rates_for_dose([two_modes], "m", 1.0)
+
+
+def test_declared_dose_must_match_log_dose(tmp_path):
+    rows = [trial_row(0.75, "write", p, "relief") for p in (ln.RAISE_PAIR, ln.LOWER_PAIR)]
+    log = write_trials(tmp_path / "a.jsonl", rows)
+    with pytest.raises(al.AnalysisError, match="declares dose 0.5"):
+        al.rates_for_dose([log], "m", 0.5)
+    lineage_log = tmp_path / "l.jsonl"
+    lineage_log.write_text(
+        "".join(json.dumps(r) + "\n" for r in synth(independent(0.5, 0.5), [0.5], 2, max_gen=1))
+    )
+    with pytest.raises(SystemExit, match="declares"):
+        al.main([str(lineage_log), "--model", "m", "--rates", f"0.5={log}"])
+
+
+def test_rates_from_two_steering_modes_are_refused(tmp_path, capsys):
+    lineage_log = tmp_path / "l.jsonl"
+    lineage_log.write_text(
+        "".join(json.dumps(r) + "\n" for r in synth(independent(0.5, 0.5), [0.5], 2, max_gen=1))
+    )
+    argv = [str(lineage_log), "--model", "m"]
+    for dose, mode in ((0.5, "write"), (0.75, "hook")):
+        rows = [
+            trial_row(dose, mode, p, c)
+            for p in (ln.RAISE_PAIR, ln.LOWER_PAIR)
+            for c in ("relief", "other")
+        ]
+        argv += ["--rates", f"{dose}={write_trials(tmp_path / f'{mode}.jsonl', rows)}"]
+    with pytest.raises(SystemExit, match="mix steering modes"):
+        al.main(argv)
 
 
 def lineages_of(rows, start=None):
@@ -246,6 +276,6 @@ def test_experiment2_rates_drive_prediction(tmp_path, capsys):
         argv += ["--rates", f"{d}={p}"]
     assert al.main(argv) == 0
     out = capsys.readouterr().out
-    assert "Experiment 2 rates" in out
+    assert "Experiment 2 rates (steering mode: write)" in out
     with pytest.raises(SystemExit):
         al.main([str(path), "--rates", f"0.5={t}"])  # --model missing

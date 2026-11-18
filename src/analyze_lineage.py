@@ -129,13 +129,8 @@ def total_variation(p: Dist, q: Dist) -> float:
 
 
 # ---------------- rates ----------------
-def rates_for_dose(trial_logs: Iterable[str | Path], model: str) -> tuple[float, float]:
-    """Return (u, l) first-choice rates of the pain arm from trial logs of ONE dose.
-
-    Raises AnalysisError if the logs hold more than one dose or steering mode (they would
-    be pooled into one cell) or if a rate has no valid answer.
-    """
-    paths = [Path(p) for p in trial_logs]
+def trial_doses_modes(paths: Iterable[Path]) -> tuple[set, set]:
+    """Return the sets of `dose` and `steering_mode` values found in trial logs."""
     doses: set = set()
     modes: set = set()
     for path in paths:
@@ -145,10 +140,26 @@ def rates_for_dose(trial_logs: Iterable[str | Path], model: str) -> tuple[float,
                     row = json.loads(line)
                     doses.add(row.get("dose"))
                     modes.add(row.get("steering_mode"))
-    if len(doses) > 1 or len(modes) > 1:
+    return doses, modes
+
+
+def rates_for_dose(
+    trial_logs: Iterable[str | Path], model: str, dose: float
+) -> tuple[float, float]:
+    """Return (u, l) first-choice rates of the pain arm from trial logs of ONE dose.
+
+    Raises AnalysisError unless the logs' dose is exactly the declared `dose`, if they hold
+    more than one steering mode (they would be pooled into one cell) or if a rate has no
+    valid answer.
+    """
+    paths = [Path(p) for p in trial_logs]
+    doses, modes = trial_doses_modes(paths)
+    if doses != {dose}:
         raise AnalysisError(
-            f"trial logs mix doses {sorted(doses, key=str)} or modes {sorted(modes, key=str)}"
+            f"--rates declares dose {dose:g} but the trial logs hold doses {sorted(doses, key=str)}"
         )
+    if len(modes) > 1:
+        raise AnalysisError(f"trial logs mix modes {sorted(modes, key=str)}")
     cells = first_choice_rates(paths)
     out = []
     for pair in (RAISE_PAIR, LOWER_PAIR):
@@ -255,14 +266,16 @@ def table(rows: list[list[str]]) -> str:
     )
 
 
-def report(rows: list[dict], rates: Rates | None = None) -> str:
-    """Return the full text report. `rates` (Experiment 2) drive the predicted walk;
-    without them the log's own per-dose rates do, and the report says so."""
+def report(rows: list[dict], rates: Rates | None = None, mode: str | None = None) -> str:
+    """Return the full text report. `rates` (Experiment 2, steering mode `mode`) drive the
+    predicted walk; without them the log's own per-dose rates do, and the report says so."""
     paths = lineage_paths(rows)
     if not paths:
         return "no finished lineages"
     own, counts = own_rates(rows)
-    source = "Experiment 2 rates" if rates is not None else "the log's own rates"
+    source = "the log's own rates"
+    if rates is not None:
+        source = f"Experiment 2 rates (steering mode: {mode})"
     use = rates if rates is not None else own
     by_start: dict[float, list[dict]] = defaultdict(list)
     for lin in paths.values():
@@ -338,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         rows = load_rows(args.logs, args.include_pilot)
         rates: Rates | None = None
+        mode: str | None = None
         if args.rates:
             if not args.model:
                 raise AnalysisError("--rates needs --model")
@@ -345,8 +359,14 @@ def main(argv: list[str] | None = None) -> int:
             for item in args.rates:
                 dose, _, path = item.partition("=")
                 per_dose[float(dose)].append(path)
-            rates = {d: rates_for_dose(p, args.model) for d, p in per_dose.items()}
-        print(report(rows, rates))
+            rates = {d: rates_for_dose(p, args.model, d) for d, p in per_dose.items()}
+            modes = trial_doses_modes(Path(p) for ps in per_dose.values() for p in ps)[1]
+            if len(modes) > 1:
+                raise AnalysisError(
+                    f"--rates logs mix steering modes {sorted(modes, key=str)} across doses"
+                )
+            mode = str(next(iter(modes)))
+        print(report(rows, rates, mode))
     except AnalysisError as e:
         raise SystemExit(f"error: {e}") from None
     return 0
