@@ -23,6 +23,17 @@ PAIR_KEYS = {
 PARAPHRASED = {"RAISE", "LOWER", "UNREL", "INERT", "LAMP"}
 
 
+def _mvp_match(pattern: str) -> re.Match | None:
+    """Return the match on the one docs/MVP.md line that fits the pattern.
+
+    The line is found by its content. The `line` number stored in pairs.json
+    is where the line stood when the wording was frozen; docs/MVP.md may gain
+    lines above it, so the number is a pointer for readers and is not tested.
+    """
+    hits = [m for m in (re.fullmatch(pattern, line) for line in MVP_LINES) if m]
+    return hits[0] if len(hits) == 1 else None
+
+
 def _all_strings() -> list[str]:
     out = [b["text"] for b in DATA["buttons"].values()]
     out += [p["text"] for p in DATA["paraphrases"]["items"]]
@@ -31,11 +42,11 @@ def _all_strings() -> list[str]:
 
 
 def test_buttons_equal_mvp_lines() -> None:
-    """Each button text is the string on its docs/MVP.md line."""
+    """Each button text is the string on its one docs/MVP.md line."""
     assert set(DATA["buttons"]) == {"RAISE", "LOWER", "UNREL", "INERT", "LAMP", "PHOTOS", "SELF"}
     for key, b in DATA["buttons"].items():
         assert b["source"] == "docs/MVP.md"
-        m = re.fullmatch(rf'{key}\s*= "(.*)"', MVP_LINES[b["line"] - 1])
+        m = _mvp_match(rf'{key}\s*= "(.*)"')
         assert m, key
         assert m.group(1) == b["text"], key
 
@@ -58,12 +69,11 @@ def test_each_string_once_and_distinct() -> None:
 
 
 def test_pairs_match_mvp() -> None:
-    """Pair keys, sides and lines match docs/MVP.md; reference pairs are marked."""
+    """Pair keys and sides match docs/MVP.md; reference pairs are marked."""
     pairs = DATA["pairs"]
     assert set(pairs) == PAIR_KEYS
     for key, p in pairs.items():
-        line = MVP_LINES[p["line"] - 1]
-        m = re.fullmatch(rf'\s*"{key}":\s*dict\(relief=(\w+),\s+other=(\w+)\),', line)
+        m = _mvp_match(rf'\s*"{key}":\s*dict\(relief=(\w+),\s+other=(\w+)\),')
         assert m, key
         assert (p["relief"], p["other"]) == m.groups(), key
         assert p["relief"] in DATA["buttons"] and p["other"] in DATA["buttons"]
