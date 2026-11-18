@@ -5,9 +5,29 @@ extracted from `Qwen/Qwen3-8B` and `Qwen/Qwen3-14B` (the post-trained
 checkpoints, which have no separate instruct release). The folder suffix
 `_base` is a file-name label only and does not mean the `-Base` checkpoints.
 Verdict: VALID for both sizes. The revision was not recorded. That is a LATER
-question and does not change the verdict. No `src/` module is added. The two
-subtasks below add CPU-only tests. They read the submodule as data, so the
-evidence the verdict rests on stays checked if the submodule pin moves.
+question and does not change the verdict. No `src/` module is added. S1 adds
+one CPU-only test that reads the submodule as data, so the evidence the
+verdict rests on stays checked if the submodule pin moves. S2 only removes an
+uncommitted draft and adds no test (see S2 and Changes).
+
+Why no shape test. The verdict rests on the extraction ids that S1 pins, not
+on shapes. The brief (Findings, `-Base` config line) records that
+`Qwen/Qwen3-8B-Base` and `Qwen/Qwen3-14B-Base` share both `num_hidden_layers`
+and `hidden_size` with the post-trained checkpoints, so a shape check cannot
+tell the checkpoints apart and adds nothing to the finding. A stdlib-only
+pickle-opcode test would be fragile, and its key set is not a READ finding in
+the brief. The shape and `layer` check stays the brief's LATER item, to be
+run at calibration, where torch and numpy are both installed.
+
+Correction to the brief. The brief assumes `torch.load(..., weights_only=True)`
+loads `pain_vectors.pt` cleanly (INFERRED check line and LATER item on
+loading). That is wrong as stated. Source: S2 executor's BLOCKED report on
+this branch. The call raises `_pickle.UnpicklingError: Unsupported global:
+GLOBAL numpy.core.multiarray.scalar` for both folders, because `layer` is
+stored as a numpy int64 scalar. Disassembly of the 8B `data.pkl` without
+unpickling also showed an `extraction` key (`'final_token'`) that the brief
+does not list. Both points are recorded in the brief's Traps by the orchestrator,
+because no subtask may own `research/`.
 
 ## Interfaces
 
@@ -66,31 +86,39 @@ evidence the verdict rests on stays checked if the submodule pin moves.
     a comment beside it.
   - `git status` shows no change under `third_party/`.
 
-### S2: Test that the stored vectors have the claimed checkpoint's shape and keys
-- Owns: `tests/test_vector_shapes.py`
+### S2: Remove the uncommitted shape-test draft
+- Owns: `tests/test_vector_shapes.py` (deletion only)
 - Depends on: none
-- Do: Write one CPU-only pytest file, parametrized over the two folder names,
-  with an expected d_model of 4096 for 8B and 5120 for 14B (Interfaces). This
-  runs the brief's check for its INFERRED finding that the 16384- and
-  20480-byte storages hold 4096 and 5120 float32 elements.
-  For each size, load
-  `ROOT/results/3.2_pain_vectors/pain_vectors/<name>/pain_vectors.pt` with
-  `torch.load(path, map_location="cpu", weights_only=True)`. Never use
-  `weights_only=False` and never unpickle any other way. Assert:
-  - the loaded object is a dict whose key set is exactly
-    `{"s2_pain_vector", "s1_pain_vector", "layer"}` (brief, Findings on
-    `data.pkl` and the writer at `01_extract...py:503-508`);
-  - `s2_pain_vector` and `s1_pain_vector` are tensors with
-    `shape == (d_model,)` and `dtype == torch.float32` (brief: FloatStorage,
-    16384 / 20480 bytes).
-  Do not assert the value of `layer`. The brief leaves the match to 34 / 31
-  as a LATER question with no READ value. Skip per the Interfaces rule if a
-  file is missing. Type-hint every function and give each a docstring.
+- Do: Delete the untracked draft `tests/test_vector_shapes.py` from the
+  working tree. It was never committed, so there is nothing to commit; do not
+  write a replacement. Do not load or unpickle any `.pt` file, do not add any
+  dependency, and do not touch `pyproject.toml`, `scripts/`, `research/` or
+  `third_party/`. This is option (a) from the re-plan request: the shape and
+  `layer` check stays the brief's LATER item for calibration, for the reasons
+  given at the top of this plan.
 - Done when:
-  - `python -m pytest tests/test_vector_shapes.py -q -rs` passes with no
-    skips in an initialized worktree. This settles the brief's INFERRED check:
-    "loading with `weights_only=True` and asserting `shape == (4096,)` / `(5120,)`".
-  - `./scripts/check.sh` exits 0, and the test takes well under a few seconds
-    on CPU.
-  - `grep -n weights_only tests/test_vector_shapes.py` shows only `True`.
-  - `git status` shows no change under `third_party/`.
+  - `test -e tests/test_vector_shapes.py` fails (the file is gone), and
+    `git status --porcelain -- tests/` shows nothing for it.
+  - `./scripts/check.sh` exits 0. (Per the executor's note, one file can be
+    run with `python -m pytest -p no:langsmith tests/test_vector_provenance.py -q`
+    if a global langsmith plugin crashes on import.)
+  - `git status` shows no change under `third_party/`, and `git log` shows S1's
+    commit `de8437d` unchanged.
+
+## Brief correction (done)
+
+- The orchestrator added the Traps line and the caveat on the LATER loading
+  item to `research/feature-vectors.md`, sourced to the S2 executor's BLOCKED
+  report. It records only what the executor observed: the `weights_only=True`
+  failure on the numpy scalar, and the `extraction` key seen in the 8B
+  `data.pkl` disassembly. The planner's unsourced suggestion to use
+  `add_safe_globals` was left out. No human decision is open.
+
+## Changes
+
+- S1: unchanged (passed, committed as `de8437d`). Do not run again.
+- S2: rewritten. It no longer writes a test. It only deletes the uncommitted
+  draft `tests/test_vector_shapes.py`. Run S2 again.
+- Top of plan: added why there is no shape test and the correction to the
+  brief's `weights_only=True` assumption.
+- Added `## Brief correction (done)` for the Traps line in the brief.

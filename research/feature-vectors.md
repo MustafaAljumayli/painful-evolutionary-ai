@@ -57,6 +57,7 @@ The authors record no revision for Qwen3. Ours will be pinned at load time.
 - The `-Base` checkpoints share both dimensions with the post-trained ones, so loading the wrong id would raise no shape error. Use `Qwen/Qwen3-8B` / `Qwen/Qwen3-14B` and never derive an id from the folder name.
 - The authors extracted from plain transcripts (no chat template, so thinking played no part). Our button task runs with the chat template and thinking off. It is the same checkpoint in a different prompt format, and the vector was never validated in chat format on Qwen3.
 - No revision was recorded. If an HF repo was updated between the extraction (before 2026-09-15, commit `44cae44`) and our runs, the weights could differ silently.
+- `torch.load(pain_vectors.pt, map_location="cpu", weights_only=True)` fails on both files with `Unsupported global: GLOBAL numpy.core.multiarray.scalar`, because `layer` is stored as a numpy int64 scalar. A `pickletools.dis` of the 8B `data.pkl` (no unpickling) shows the keys `s2_pain_vector` and `s1_pain_vector` (FloatStorage, shape (4096,)), `layer` (value 34) and `extraction` (`'final_token'`). The 14B pickle was not disassembled. Source: the S2 executor's BLOCKED report on branch `feature/vectors`, 2026-11-17; added after the research step and not re-checked by the researcher. Never work around the failure with `weights_only=False`.
 
 ## Decisions made
 - I read the paper from the arXiv HTML v3 because the local PDF (also v3, by its stamp) could not be rendered. Citations are by section and footnote, not page.
@@ -64,5 +65,5 @@ The authors record no revision for Qwen3. Ours will be pinned at load time.
 
 ## Open questions
 - [LATER] The revision is not recorded. The HF repo history should be checked for commits to `Qwen/Qwen3-8B` / `Qwen/Qwen3-14B` weight files after mid-2026. Our pins are `b968826d` and `40c06982` (`research/feature-models.md:6-7`).
-- [LATER] Confirm with `torch.load(..., weights_only=True)` that `pain_vectors.pt` `layer` is 34 / 31 (final-token extraction) and that the shapes are 4096 / 5120.
+- [LATER] Confirm with `torch.load(..., weights_only=True)` that `pain_vectors.pt` `layer` is 34 / 31 (final-token extraction) and that the shapes are 4096 / 5120. A plain `weights_only=True` load fails on the numpy scalar (see Traps), so this needs an environment with numpy and a safe way to admit that scalar. It should also confirm the full key set on both files; only the 8B file has been disassembled.
 - [LATER] The vector is extracted on plain transcripts and our task uses the chat template. Calibration should show whether the axis still separates pain in chat format on Qwen3.
