@@ -8,8 +8,10 @@ coefficients, scenario counts, lineage counts) is an arbitrary test value, not a
 
 from __future__ import annotations
 
+import collections
 import json
 import os
+import random
 import subprocess
 import sys
 from pathlib import Path
@@ -130,6 +132,22 @@ def test_each_generation_decides_at_its_own_dose_and_groups_by_dose():
     # first generation: two doses, 2 lineages x 2 pairs each; later doses follow the walk
     assert ch.calls[:2] == [(0.5, 4), (1.0, 4)]
     assert {d for d, _ in ch.calls} == {0.5, 0.75, 1.0, 1.25}
+
+
+def test_one_decision_per_generation_when_starts_are_one_step_apart():
+    # Random but seeded stub: raise and lower each pressed with p=0.5 (arbitrary test value).
+    def fn(dose, pair, session):
+        return "relief" if random.Random(session.seed).random() < 0.5 else "other"
+
+    lins, rows = run(StubChooser(fn), [0.5, 0.75], per_start=40, max_gen=4)
+    counts = collections.Counter(
+        (r["lineage_id"], r["generation"]) for r in rows if r["kind"] == "step"
+    )
+    assert counts and set(counts.values()) == {1}
+    dose_at = {lin.lineage_id: lin.doses for lin in lins}
+    for r in rows:
+        if r["kind"] in ("session", "step") and r["lineage_id"] in dose_at:
+            assert r["nominal_dose"] == dose_at[r["lineage_id"]][r["generation"]]
 
 
 def test_start_at_cap_ends_without_decisions():

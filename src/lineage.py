@@ -436,8 +436,11 @@ def run_lineages(
         active = [lin for lin in lineages if lin.status is None]
         if not active:
             break
-        for dose in sorted({lin.dose for lin in active}):
-            group = [lin for lin in active if lin.dose == dose]
+        before = {
+            lin.lineage_id: lin.dose for lin in active
+        }  # doses at the start of this generation
+        for dose in sorted(set(before.values())):
+            group = [lin for lin in active if before[lin.lineage_id] == dose]
             valid = decide(group, dose, gen, chooser, scenarios, meta, emit)
             for lin in group:
                 up = valid.get((lin.lineage_id, RAISE_PAIR))
