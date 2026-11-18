@@ -103,7 +103,8 @@ def format_table(rates: dict[tuple[str, str, str], Cell]) -> str:
         )
     widths = [max(len(row[i]) for row in rows) for i in range(len(header))]
     lines = [
-        "  ".join(value.ljust(width) for value, width in zip(row, widths)).rstrip() for row in rows
+        "  ".join(value.ljust(width) for value, width in zip(row, widths, strict=True)).rstrip()
+        for row in rows
     ]
     return "\n".join(lines)
 
