@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Starts Claude Code for one role of the loop, with the model and effort set
-# in loop.conf. Solo's agent tools call this, so the configuration lives in
-# the repo and not in Solo's settings:
+# in loop.conf. Solo's agent tools call it through three small commands, so
+# the configuration lives in the repo and not in Solo's settings:
 #
-#   bash scripts/agent.sh lead        the agent the user talks to
-#   bash scripts/agent.sh loop        one per ticket, started by the lead
-#   bash scripts/agent.sh executor    one per subtask, started by a loop
+#   scripts/claude-lead        the agent the user talks to
+#   scripts/claude-loop        one per ticket, started by the lead
+#   scripts/claude-executor    one per subtask, started by a loop
+#
+# Each is `bash scripts/agent.sh <role>` and otherwise behaves like `claude`.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 . "$here/loop.conf"
@@ -16,6 +18,16 @@ unset ANTHROPIC_API_KEY
 
 role="${1:-}"
 [ "$#" -gt 0 ] && shift
+
+# Solo checks a tool by running its command the way it would run `claude`
+# itself (`--version`, `mcp ...`). Hand anything that is not the start of a
+# session straight to claude, unchanged.
+case "${1:-}" in
+  -v | --version | -h | --help | mcp | doctor | update | upgrade | install | auth | config | plugin | plugins | agents | setup-token)
+    exec claude "$@"
+    ;;
+esac
+
 case "$role" in
   lead)
     exec claude --model "$LEAD_MODEL" --effort "$LEAD_EFFORT" "$@"

@@ -37,8 +37,8 @@ files hold all the state.
   You start each feature loop with the first, and each loop starts its
   executors with the second. If either is missing, stop and tell the user
   to add it under Settings > Agents > Agent tools > Add tool, with Command
-  `bash` and Default arguments `<full path of this checkout>/scripts/agent.sh loop`
-  or the same path followed by `executor`.
+  `<full path of this checkout>/scripts/claude-loop` or
+  `<full path of this checkout>/scripts/claude-executor`, and no arguments.
 - Run `./scripts/check.sh`. It must pass on `main` before anything starts.
   If it fails, stop and show the user its output.
 

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# The command behind Solo's agent tool "Claude lead": the agent the user talks to.
+# Model, effort and tools come from loop.conf. See scripts/agent.sh.
+exec bash "$(cd "$(dirname "$0")" && pwd)/agent.sh" lead "$@"
