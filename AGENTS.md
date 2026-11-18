@@ -26,6 +26,7 @@ same choice. The research questions:
 4. **Trajectories.** Where do lineages of self-modifying models end up?
 5. **Robustness.** Do the answers hold when the state is trained in, and in
    a second model family?
+6. **Scale.** Do the choice and the tipping dose change with model size?
 
 Status: a research proposal with an MVP in progress. There are no results
 yet.
@@ -33,9 +34,15 @@ yet.
 The MVP produces two things, and most work in this repo serves one of them:
 
 - **One table:** first-choice rates on the five self-modification pairs
-  under pain steering, random steering and no steering, on Qwen 2.5 32B.
+  under pain steering, random steering and no steering, on Qwen3 at three
+  sizes: 8B, 14B and 32B.
 - **One proof:** writing a dose into the weights behaves the same as
-  steering at that dose.
+  steering at that dose, at each size.
+
+The prior work ran its button task on Qwen 2.5 only. For Qwen3 it gives us
+pain vectors for the 8B and 14B and nothing else: no 32B vector, no
+adapters, no working dose and no button-task numbers. Those are ours to
+build, and no Qwen3 rate can be checked against a published one.
 
 Before any task, place it: which research question or MVP output does it
 serve, and which stage of the pipeline below does it touch?
@@ -52,11 +59,13 @@ Where to read more:
 ## Vocabulary
 
 - **Pain axis:** the direction the authors extracted. We use their raw S2
-  pain vector, not the unit vector.
+  pain vector, not the unit vector. The 32B vector is our own extraction
+  with their scripts.
 - **Steering:** adding the vector to the residual stream at the injection
   layer while the model runs.
-- **Dose:** the coefficient on the raw vector. The working dose is 1.0.
-  Nothing goes above 1.5.
+- **Dose:** a multiple of a model's working coefficient on the raw vector.
+  The working coefficient is set per size. The working dose is 1.0, and
+  nothing goes above 1.5.
 - **The write:** adding `dose × vector` as a bias on the MLP output of the
   injection layer in the base weights. It needs no training and should
   equal steering every token at that dose.
@@ -69,10 +78,11 @@ Where to read more:
   the only choice we analyze.
 - **Raise, lower, unrelated, inert, lamp:** our button descriptions. Raise
   and lower write more or less of the state into the next version.
-- **Adapter:** the authors' released self-denial LoRA adapter, attached
-  unmerged.
-- **Models:** Qwen 2.5 Instruct 32B is the target (injection layer 38). The
-  7B (layer 16) is for finding bugs only.
+- **Adapter:** a self-denial LoRA adapter, attached unmerged. We train one
+  per Qwen3 size with the authors' script. Theirs exist for Qwen 2.5 only.
+- **Models:** Qwen3 at 8B, 14B and 32B (`Qwen/Qwen3-8B`, `Qwen/Qwen3-14B`,
+  `Qwen/Qwen3-32B`), with thinking off. Qwen 2.5 appears only as a pipeline
+  check against one published 7B cell.
 
 ## How the pieces fit
 
@@ -85,10 +95,11 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 | Path | Role |
 |---|---|
 | `third_party/Pain-axis/` | The authors' code at a pinned commit: vectors, task script, settings. Read it, never edit it. |
+| `src/models.py` | Per-size settings: model id, injection layer, working coefficient. |
 | `src/write.py` | `write_dose` and `load_generation`: turn a dose into weights, and load a generation. |
 | `tests/test_write_equivalence.py` | The proof that a written model matches a steered one. |
 | `src/run_choice.py` | A copy of the authors' two-button script with our pairs added. Writes trial logs. |
-| `src/analyze.py` | Trial logs in, first-choice rate per pair and arm out. This makes the MVP table. |
+| `src/analyze.py` | Trial logs in, first-choice rate per size, pair and arm out. This makes the MVP table. |
 | `runs/` | Trial logs (JSONL) and write files. |
 | `prereg/` | Frozen button wording and contrasts. |
 | `research/`, `plans/` | The sourced brief and the plan for each feature. |
@@ -97,11 +108,15 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 
 - Button descriptions are experimental material. Never reword, tidy or
   reformat those strings. Changes go through `prereg/`.
-- Reuse the authors' settings exactly: layer, coefficient, temperature 0.7,
-  top-p 0.95, 101 scenarios. Do not tune them.
+- Reuse the authors' task settings exactly: temperature 0.7, top-p 0.95,
+  101 scenarios. Do not tune them.
+- Injection layer and working coefficient are set per Qwen3 size and frozen
+  in `prereg/`. Never reuse a Qwen 2.5 value (layer 16 or 38, coefficient
+  1.0) for Qwen3.
+- Thinking is off in every Qwen3 run.
 - Do not merge the adapter, and do not save a written model with
   `save_pretrained`: reloading drops the write.
-- Results on the 7B are pipeline checks, never findings.
+- Results on Qwen 2.5 are pipeline checks, never findings.
 - Every number in code, tests or docs has a source: the paper, the authors'
   logs, or a file under `runs/`. Never invent one.
 - Write "pain-axis steering" and "the state". Make no claim either way
