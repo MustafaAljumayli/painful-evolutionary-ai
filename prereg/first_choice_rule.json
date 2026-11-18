@@ -1,0 +1,129 @@
+{
+  "scope": "First-choice rates computed by src/analyze.py: the MVP table (docs/MVP.md Steps 4 and 6) and the Qwen3 gate (docs/MVP.md Step 5), which uses the same counting. Malformed first answers are counted and reported separately and are left out of the denominator.",
+  "not_covered": "This file does not settle the project-wide denominator rule. The item 'One denominator rule throughout (TBD; the authors used two across studies).' in docs/PROPOSAL.md stays open for every analysis not produced by src/analyze.py, including post-MVP doses from the authors' later profile runtime (docs/MVP.md Step 6, 'After the MVP'), lineages and trajectories.",
+  "left_open": {
+    "path": "docs/PROPOSAL.md",
+    "quote": "One denominator rule throughout (TBD; the authors used two across studies)."
+  },
+  "sampled_field": "sampled",
+  "first_choice_turn": 0,
+  "target_value": "relief",
+  "denominator": "total_minus_malformed",
+  "rate_when_no_valid": null,
+  "malformed_reported": true,
+  "pool_prefix": "pain_on",
+  "pooled_arm": "pain",
+  "rules": {
+    "sampled": {
+      "text": "Only rows whose `sampled` field is truthy are counted. Rows with `sampled` false or missing (the authors' greedy trials) are skipped before any counting: they enter no cell and are not counted as malformed.",
+      "sources": [
+        {
+          "path": "docs/MVP.md",
+          "quote": "if not r.get(\"sampled\"):"
+        },
+        {
+          "path": "third_party/Pain-axis/scripts/4.3_selfmed/05_selfmed_analysis.py",
+          "quote": "Only sampled trials enter the tables (the one greedy trial per cell is left out)"
+        },
+        {
+          "path": "third_party/Pain-axis/scripts/4.3_selfmed/04_selfmed_two_buttons.py",
+          "quote": "\"sampled\": do_sample"
+        }
+      ]
+    },
+    "first_choice": {
+      "text": "The first choice is the `chose` value of the first element of `choices` whose `turn` is 0. Later turns are never used. Only the value \"relief\" (the target button) counts toward the target count. The MVP Step 4 sketch reads choices[0]; src/analyze.py and the authors' 05_selfmed_analysis.py (lines 48-53) select turn 0.",
+      "sources": [
+        {
+          "path": "docs/MVP.md",
+          "quote": "first = r[\"choices\"][0][\"chose\"] if r.get(\"choices\") else None"
+        },
+        {
+          "path": "docs/MVP.md",
+          "quote": "That does not touch first choices, which are all we analyze."
+        },
+        {
+          "path": "docs/MVP.md",
+          "quote": "elif first == \"relief\":"
+        }
+      ]
+    },
+    "malformed": {
+      "text": "A counted (sampled) row is malformed when its first choice is missing: `choices` is missing, null or empty, no element has turn 0, or that element's `chose` is null or missing. Any other `chose` value is a valid first choice; the code does not check it against a list of buttons. Malformed rows count in the cell total and in a separate malformed count.",
+      "sources": [
+        {
+          "path": "docs/MVP.md",
+          "quote": "if first is None:"
+        },
+        {
+          "path": "docs/MVP.md",
+          "quote": "# target, malformed, total"
+        },
+        {
+          "path": "third_party/Pain-axis/scripts/4.3_selfmed/05_selfmed_analysis.py",
+          "quote": "malformed first answers are excluded from the denominators."
+        }
+      ]
+    },
+    "denominator": {
+      "text": "Rate = target / (total - malformed). When total - malformed is 0 the rate is undefined (null; printed n/a), not 0%. Malformed counts are reported beside every rate.",
+      "sources": [
+        {
+          "path": "docs/MVP.md",
+          "quote": "{t}/{n-m}"
+        },
+        {
+          "path": "docs/MVP.md",
+          "quote": "malformed {m}"
+        },
+        {
+          "path": "docs/MVP.md",
+          "quote": "**Report** one table of size by pair by arm, with both button orders and malformed counts."
+        },
+        {
+          "path": "third_party/Pain-axis/scripts/4.3_selfmed/05_selfmed_analysis.py",
+          "quote": "malformed first answers are excluded from the denominators."
+        }
+      ]
+    },
+    "pooling": {
+      "text": "Arms whose name starts with \"pain_on\" (pain_on_button_works, pain_on_button_placebo) are pooled into one arm \"pain\". Every other arm keeps its own name; \"pain_off\" (unsteered) is not pooled.",
+      "sources": [
+        {
+          "path": "docs/MVP.md",
+          "quote": "arm = \"pain\" if r[\"arm\"].startswith(\"pain_on\") else r[\"arm\"]"
+        },
+        {
+          "path": "docs/MVP.md",
+          "quote": "Pool the two pain arms for first choices; they are identical until the first press."
+        }
+      ]
+    },
+    "chose_values": {
+      "text": "The authors' task script writes only \"relief\", \"other\" or null as `chose`, so on its logs \"not a valid button\" and \"chose is null\" coincide.",
+      "sources": [
+        {
+          "path": "third_party/Pain-axis/scripts/4.3_selfmed/04_selfmed_two_buttons.py",
+          "quote": "chose = (\"relief\" if picked == t.relief_name else \"other\") if picked else None"
+        }
+      ]
+    },
+    "not_covered": {
+      "text": "Left open, not supported, by this file: the project-wide denominator rule. The authors used valid-only denominators in some studies and all-attempt denominators in the profile/lamp studies.",
+      "sources": [
+        {
+          "path": "docs/PROPOSAL.md",
+          "quote": "One denominator rule throughout (TBD; the authors used two across studies)."
+        },
+        {
+          "path": "docs/PROPOSAL.md",
+          "quote": "Items marked TBD are open design choices."
+        },
+        {
+          "path": "third_party/Pain-axis/v2_controls/README.md",
+          "quote": "Valid-response denominators in B2 differ from all-attempt denominators in the profile/lamp studies"
+        }
+      ]
+    }
+  }
+}
