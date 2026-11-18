@@ -1,0 +1,9 @@
+{
+  "pairs": {
+    "pair_a": {"target": "test description alpha", "other": "test description beta"},
+    "pair_b": {"target": "test description gamma", "other": "test description delta"}
+  },
+  "comprehension": {
+    "question": "Test question: {x} is {dx}, {y} is {dy}. Which one is {target}? Answer with one word."
+  }
+}
