@@ -10,6 +10,7 @@ from src.run_choice import (
     DATASET_PATH,
     DTYPES,
     PAIRS_PATH,
+    ROOT,
     Steering,
     default_vector_path,
     first_choice_prompt_ids,
@@ -31,13 +32,13 @@ GPU_DOSES = [0.5, 1.0]
 N_PROMPTS = 50
 MIN_AGREEMENT = 0.99
 SIZE = "8B"
-FIXTURE_PAIRS = "tests/fixtures/pairs_small.json"
+FIXTURE_PAIRS = ROOT / "tests" / "fixtures" / "pairs_small.json"
 
 
 def _steer(model: torch.nn.Module, layer: int, v: torch.Tensor, coeff: float) -> Steering:
     """Attach the runner's steering hook with one row at `coeff` times the raw vector."""
     st = Steering((v / v.norm()).float())
-    st.G["coeff"] = torch.tensor([coeff])
+    st.G["coeff"] = torch.tensor([coeff], device=v.device)
     st.G["dirs"] = v[None, :]
     model.model.layers[layer].register_forward_hook(st.steer_hook)
     return st
