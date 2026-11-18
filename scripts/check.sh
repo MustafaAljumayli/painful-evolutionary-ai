@@ -37,6 +37,9 @@ echo "== dependencies"
 echo "== loop config"
 bash scripts/check_loop.sh || fail=1
 
+echo "== protected paths"
+bash scripts/check_protected.sh || fail=1
+
 echo "== paper text"
 ./scripts/paper.sh check || fail=1
 

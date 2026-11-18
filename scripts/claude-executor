@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# The command behind Solo's agent tool "Claude executor": one per subtask, started by a loop.
-# Model, effort and tools come from loop.conf. See scripts/agent.sh.
-exec bash "$(cd "$(dirname "$0")" && pwd)/agent.sh" executor "$@"

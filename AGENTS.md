@@ -167,52 +167,65 @@ This is the planned layout from `docs/MVP.md`. Most of it is not built yet.
 
 ## Git
 
-- Work only on the branch you were started on. Never push, switch branches or
-  touch `main`.
+- Work only on the branch you were started on. Never switch branches or
+  touch `main`, and never merge a feature branch.
+- Never run `git push`. The only way anything reaches GitHub is
+  `./scripts/pr.sh <name>`, which the lead runs once a feature is done and
+  passes the integration check. It pushes that feature's branch and opens
+  its pull request. The user merges pull requests.
 - Commit only your own files:
   `git add -- <files> && git commit -m "<ID>: <summary>" -- <files>`
 - `third_party/Pain-axis` is a git submodule. After cloning the repo or
   creating a worktree, run `git submodule update --init`.
+- A feature branch may not change a protected path: `environment.yml`,
+  `pyproject.toml`, `loop.conf`, `CLAUDE.md`, `AGENTS.md`, `README.md`,
+  `scripts/`, `docs/`, `.claude/`, `.github/` or `third_party/`. The check
+  script fails if one does. Those are changed by a person, on `main`.
 
 ## How features get built
 
-There are two commands. Both exist for Claude Code (`.claude/commands/`) and
-for Copilot CLI (`.github/skills/`, started with `./scripts/copilot.sh`).
+The user runs `/lead` in a new `Claude lead` agent for each wave of tickets
+(Solo todos). A ticket is a whole feature and gets one loop, in its own
+worktree `../pea-<name>` on branch `feature/<name>`.
 
-- `/lead` is the one the user runs, from the main checkout, in a new lead
-  for each wave of tickets. It takes the tickets (Solo todos), gives each
-  its own worktree and loop agent, answers the loops' questions where the
-  docs allow, and reports to the user once. A ticket is a whole feature;
-  the lead never combines or splits tickets.
-- `/feature <what to build>` runs inside one feature worktree and never asks
-  the user anything. Its roles, in order:
-  1. **Researcher** starts from what earlier briefs established, reads the
-     paper, the authors' code and the docs, and writes a sourced brief to
-     `research/<branch>.md`.
-  2. **Planner** only splits the work into subtasks in `plans/<branch>.md`:
-     IDs, owned files, a goal and acceptance outcomes, in at most 60 lines.
-     It does not design anything.
-  3. **Executors** design and build. Each subtask gets its own executor
-     agent, started in Solo under that worktree's project, working from the
-     brief and its subtask.
-  4. **QA** runs the checks, judges whether the tests really cover each
-     outcome, and passes or fails each subtask.
-  When the loop stops it writes `reports/<branch>.md` with a status of DONE,
-  NEEDS DECISION or FAILED, which the lead reads.
+A loop is a chain of stages. Every stage is a new agent with a clean
+context, started by the lead in Solo and named `<ticket>-<stage>`:
 
-The agents are in `.claude/agents/` and `.github/agents/`. The two sets
-carry the same instructions. Change both.
+1. **research** (researcher): starts from what earlier briefs established,
+   reads the paper, the authors' code and the docs, and writes a sourced
+   brief to `research/feature-<name>.md`.
+2. **plan** (planner): only splits the work into subtasks in
+   `plans/feature-<name>.md`, in at most 60 lines. It designs nothing.
+3. **S1, S2, ...** (executor): one agent designs and builds each subtask.
+4. **qa1, qa2, ...** (QA): runs the checks, judges whether the tests really
+   cover each outcome, and passes or fails each subtask. A failed subtask
+   gets a new executor for the fix (`S1-fix1`), then a new QA round.
 
-`loop.conf` sets the model and effort of every role, and which files send
-QA to the stronger model. `scripts/agent.sh` starts the lead, a loop and an
-executor from it; Solo's agent tools `Claude lead`, `Claude loop` and
-`Claude executor` run `scripts/claude-lead`, `scripts/claude-loop` and
-`scripts/claude-executor`.
+The stages share one file, `reports/ledger.md` in the worktree: the ticket,
+answers to questions, and what every stage reported. Each agent reads it,
+does the stage named under "Now", and writes its stage report to
+`reports/stages/<stage>.md`. Nothing under `reports/` is committed.
+
+`scripts/loop.py` (run as `./scripts/loop.sh`) is the loop driver. It has no
+model in it. It reads each stage report, writes the ledger, applies the
+limits (three QA failures per subtask, one re-plan, six QA rounds) and tells
+the lead which agent to start next. When every loop has ended, the lead runs
+`./scripts/integrate.sh` to check the finished branches together, then
+`./scripts/pr.sh` to open one pull request per feature, and reports once.
+
+`loop.conf` sets the model and effort of every role, the limits, the
+protected paths, and which files send QA to the stronger model. Solo's two
+agent tools, `Claude lead` and `Claude stage`, run `scripts/claude-lead` and
+`scripts/claude-stage`.
+
+The agents are in `.claude/agents/`. `.github/agents/` keeps the same
+instructions for Copilot CLI; change both. The loop driver starts agents
+with Claude Code only.
 
 ## Research record
 
 - `docs/` holds the sources the researcher reads first: the paper, the
   proposal and the MVP plan.
-- `research/<branch>.md` is the sourced brief for a feature and
-  `plans/<branch>.md` is its plan. Both are committed on the feature branch
-  and merge with the code.
+- `research/feature-<name>.md` is the sourced brief for a feature and
+  `plans/feature-<name>.md` is its plan. Both are committed on the feature
+  branch and arrive on `main` with its pull request.

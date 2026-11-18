@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Starts Claude Code for one role of the loop, with the model and effort set
-# in loop.conf. Solo's agent tools call it through three small commands, so
+# in loop.conf. Solo's agent tools call it through two small commands, so
 # the configuration lives in the repo and not in Solo's settings:
 #
-#   scripts/claude-lead        the agent the user talks to
-#   scripts/claude-loop        one per ticket, started by the lead
-#   scripts/claude-executor    one per subtask, started by a loop
+#   scripts/claude-lead     the agent the user talks to
+#   scripts/claude-stage    one stage of one loop: a researcher, planner,
+#                           executor or QA agent, started by the lead in the
+#                           loop's worktree. Which one is in reports/next.env,
+#                           written by the loop driver (scripts/loop.py).
 #
 # Each is `bash scripts/agent.sh <role>` and otherwise behaves like `claude`.
 set -euo pipefail
@@ -32,17 +34,28 @@ case "$role" in
   lead)
     exec claude --model "$LEAD_MODEL" --effort "$LEAD_EFFORT" "$@"
     ;;
-  loop)
-    exec claude --model "$LOOP_MODEL" --effort "$LOOP_EFFORT" "$@"
-    ;;
-  executor)
-    # An executor only reads, edits and runs the checks. It loads no MCP
-    # servers, so their tool definitions are not sent with every request.
-    exec claude --agent executor --model "$EXECUTOR_MODEL" --effort "$EXECUTOR_EFFORT" \
-      --strict-mcp-config --disallowedTools "mcp__*" "$@"
+  stage)
+    if [ ! -f reports/next.env ]; then
+      echo "No stage is waiting in this folder (reports/next.env is missing)." >&2
+      echo "The lead starts stages; see ./scripts/loop.sh." >&2
+      exit 1
+    fi
+    . reports/next.env
+    case "$STAGE_ROLE" in
+      researcher | planner | executor | qa) ;;
+      *)
+        echo "reports/next.env names an unknown role: $STAGE_ROLE" >&2
+        exit 1
+        ;;
+    esac
+    # A stage agent only reads, edits and runs the checks. It loads no MCP
+    # servers, so their tool definitions are not sent with every request. It
+    # starts on its own: the ledger tells it what to do.
+    exec claude --agent "$STAGE_ROLE" --model "$STAGE_MODEL" --effort "$STAGE_EFFORT" \
+      --strict-mcp-config "$@" "Read reports/ledger.md and do the stage under Now."
     ;;
   *)
-    echo "usage: bash scripts/agent.sh lead | loop | executor" >&2
+    echo "usage: bash scripts/agent.sh lead | stage" >&2
     exit 2
     ;;
 esac

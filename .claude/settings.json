@@ -2,6 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(./scripts/check.sh)",
+      "Bash(./scripts/loop.sh *)",
+      "Bash(./scripts/integrate.sh *)",
+      "Bash(./scripts/pr.sh *)",
+      "Bash(git fetch origin)",
+      "Bash(git merge --ff-only origin/main)",
       "Bash(./scripts/paper.sh *)",
       "Bash(./scripts/graph.sh *)",
       "Bash(./scripts/facts.sh)",

@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# The command behind Solo's agent tool "Claude loop": one per ticket, started by the lead.
-# Model, effort and tools come from loop.conf. See scripts/agent.sh.
-exec bash "$(cd "$(dirname "$0")" && pwd)/agent.sh" loop "$@"

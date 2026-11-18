@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The command behind Solo's agent tool "Claude stage": one stage of one loop.
+# The role, model and effort come from reports/next.env in the worktree it is
+# started in. See scripts/agent.sh and scripts/loop.py.
+exec bash "$(cd "$(dirname "$0")" && pwd)/agent.sh" stage "$@"
