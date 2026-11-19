@@ -26,3 +26,5 @@ dependencies:
       - graphifyy==0.9.112
       - pytest==9.2.0
       - ruff==0.17.5
+      - numpy==2.5.5
+      - peft==0.22.0

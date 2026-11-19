@@ -225,8 +225,10 @@ agent tools, `Claude lead` and `Claude stage`, run `scripts/claude-lead` and
 `scripts/claude-stage`.
 
 The agents are in `.claude/agents/`. `.github/agents/` keeps the same
-instructions for Copilot CLI; change both. The loop driver starts agents
-with Claude Code only.
+instructions for Copilot CLI; change both. On Copilot the loop uses no MCP:
+Solo's agent tools `Copilot lead` and `Copilot stage` run
+`scripts/copilot-lead` and `scripts/copilot-stage`, and the lead controls
+Solo with its `solo` command-line tool (`.github/skills/solo`).
 
 ## Research record
 

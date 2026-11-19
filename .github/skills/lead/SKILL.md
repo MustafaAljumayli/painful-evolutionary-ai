@@ -6,6 +6,9 @@ description: Runs several features at once, one feature loop per ticket in its o
 The tickets to run are named in the text the user wrote with `/lead`. If
 there is no text, run every Solo todo in this project whose status is Open.
 
+You control Solo from the shell with its `solo` command-line tool. Read the
+`solo` skill before your first Solo command. Never use Solo's MCP server.
+
 You are the lead. The user talks only to you. Each ticket gets one feature
 loop in its own git worktree. A loop is a chain of stages (research, plan,
 one build per subtask, QA, fixes, then a review of its pull request), and
@@ -31,23 +34,25 @@ branches, ledgers and pull requests hold all the state.
   `origin/main`, run `git merge --ff-only origin/main`. If `main` is ahead
   of `origin/main`, stop and tell the user to run `git push origin main`
   first: a pull request opened now would also show those commits.
-- Check that you have Solo's tools for projects, todos, agents and timers,
-  and call `whoami` to learn your own process ID. If you lack the tools,
-  stop and tell the user to connect Solo to this agent tool under Settings >
-  Agents > Agent tools.
-- Check that Solo has an agent tool named `Copilot stage`. Every stage is
-  started with it. If it is missing, stop and tell the user to add it under
-  Settings > Agents > Agent tools > Add tool, with Command
-  `<full path of this checkout>/scripts/claude-stage` and no arguments.
-  (That launcher starts Claude Code. A Copilot launcher that reads
-  `reports/next.env` has not been written yet.)
+- Run `solo doctor`. If it fails, stop and tell the user to turn on HTTP API
+  under Settings > Integrations > HTTP API & CLI in Solo and install the
+  `solo` command from that page.
+- Run `echo "$SOLO_PROJECT_ID"`. That is this project's ID in Solo; the
+  todos live there.
+- Run `solo agents list --json` and find the ID of the agent tool named
+  `Copilot stage`. Every stage is started with it. If it is missing, stop
+  and tell the user to add it under Settings > Agents > Agent tools > Add
+  tool, with Command `<full path of this checkout>/scripts/copilot-stage`
+  and no arguments.
 - Run `./scripts/check.sh`. It must pass on `main` before anything starts.
   If it fails, stop and show the user its output.
 
 ## 1. Read the tickets
 
 A ticket is a Solo todo. Its title is the feature's short name, such as
-`analyze`. Its notes, with its comments, are the feature request.
+`analyze`. Its notes are the feature request. List the tickets with
+`solo todos list --project-id <this project> --status open --json` and read
+one with `solo todos get <todo id> --project-id <this project> --json`.
 
 One ticket gets one loop. Never combine two tickets into one loop and never
 split a ticket.
@@ -68,8 +73,8 @@ TICKET
 ```
 
 It prepares the worktree `../pea-<name>` on branch `feature/<name>` and
-prints instructions. Carry them out as described in step 3, then set the
-todo to In progress.
+prints instructions. Carry them out as described in step 3, then run
+`solo todos update <todo id> --project-id <this project> --status in_progress`.
 
 ## 3. Carry out the driver's instructions
 
@@ -77,22 +82,28 @@ The driver prints one instruction per line. Do them in order.
 
 - `NOTE <name> <text>`: nothing to do. Keep it for your report. It says
   whether the ticket was opened as a GitHub issue.
-- `PROJECT <folder>`: make sure that folder is a project in Solo. Add it if
-  it is not.
-- `SPAWN <agent name>`: in that loop's Solo project, start an agent with the
-  agent tool `Copilot stage`, named exactly `<agent name>`. It starts working
-  by itself; send it nothing. Then set a timer that fires when that agent
-  goes idle, delivered to your own process ID. Pass the loop's project ID to
-  every Solo call about that agent.
-- `CLOSE <agent name>`: close that agent. Its work is recorded.
-- `WAIT <agent name>`: the stage has not reported yet. Read the end of that
-  agent's output.
-  - Still working: set its timer again.
+- `PROJECT <folder>`: find that folder's project ID with
+  `solo projects list --json`. If it is not a project yet, run
+  `solo projects create pea-<name> <folder>`. Keep the ID: it is that loop's
+  project.
+- `SPAWN <agent name>`: run `solo processes spawn --project-id <the loop's
+  project> --kind agent --agent-tool-id <the Copilot stage tool> --name
+  <agent name> --json` and keep the process ID it returns. The agent starts
+  working by itself; send it nothing.
+- `CLOSE <agent name>`: run `solo processes delete <its process ID>
+  --project-id <the loop's project> --confirm-stop-running`. Its work is
+  recorded.
+- `WAIT <agent name>`: the stage has not reported yet. If this is the first
+  `WAIT` for that agent since it started, do nothing. If it is the second in
+  a row, read the end of its output with `solo processes output <its process
+  ID> --project-id <the loop's project> --lines 60`.
+  - Still working: do nothing.
   - Idle at an empty prompt and it never started: send it
-    `Read reports/ledger.md and do the stage under Now.`
+    `Read reports/ledger.md and do the stage under Now.` with
+    `solo processes input`.
   - Finished but the driver says its report is missing or unreadable: tell
-    it once to write its stage report in the exact shape its instructions
-    give, then set the timer again.
+    it once, with `solo processes input`, to write its stage report in the
+    exact shape its instructions give.
   - Waiting on an approval prompt: never answer it and never change its
     permission mode. Keep it for your report and treat the loop as held.
   - The agent does not exist: start it as for `SPAWN`.
@@ -104,17 +115,24 @@ The driver prints one instruction per line. Do them in order.
 - `POST <name>`: run `./scripts/pr.sh post <name>`. It adds the review to
   the pull request.
 - `APPROVED <name>`: the reviewer, or the user, approved the pull request.
-  The loop is over. Set the todo to Completed and add the output of
-  `./scripts/loop.sh summary <name>` and the pull request link as a comment.
+  The loop is over. Run `solo todos complete <todo id> --project-id <this
+  project>`. The summary and the pull request are already on GitHub.
 - `FAILED <name> <reason>`: the loop is over. Keep the reason. Do not retry.
 - `DECISION <name>`: the loop is paused on a question. Go to step 4.
 
-After the instructions, end your turn. Do not poll and do not sleep.
+Solo's command-line tool has no timers, so you wait with the driver. After
+the instructions, run:
 
-Each time a timer wakes you, run `./scripts/loop.sh next <name>` for that
-loop and carry out what it prints. Run it once per wake-up. If Solo refuses
-to start an agent because of its process limit, close finished agents first,
-then try again.
+```
+./scripts/loop.sh wait <the name of every loop that has a stage running>
+```
+
+It blocks until one of those stages has written its report, then prints the
+next instructions for that loop. After a few minutes without a report it
+prints `WAIT` lines and returns. Carry out what it prints and run it again,
+until no loop has a stage running. Do not poll in any other way and do not
+use `sleep`. If Solo refuses to start an agent because of its process
+limit, close finished agents first, then try again.
 
 ## 4. Decisions
 

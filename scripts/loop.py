@@ -4,6 +4,8 @@ The lead runs it through scripts/loop.sh from the main checkout:
 
     loop.sh start <name>      prepare the worktree and the ledger (ticket on stdin)
     loop.sh next <name>       read the finished stage's report, decide the next stage
+    loop.sh wait <name>...    block until a stage of one of these loops has reported,
+                              then do `next` for it (for leads without idle timers)
     loop.sh review <name>     start a review of the feature's pull request
     loop.sh answer <name>     record answers to open questions (stdin) and continue
     loop.sh approve <name>    the user approves a pull request that was held for them
@@ -23,10 +25,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -606,6 +610,39 @@ def cmd_answer(name: str) -> None:
     print("\n".join(advance(state)))
 
 
+def cmd_wait(names: list[str]) -> None:
+    """Block until a running stage of one of these loops has reported, then route it.
+
+    Returns after WAIT_SECONDS (loop.conf) at the latest, printing a WAIT line for
+    each loop still working, so the caller can simply run it again.
+    """
+    limit = float(os.environ.get("PEA_WAIT_SECONDS") or conf().get("WAIT_SECONDS", "240"))
+    start = time.time()
+    while True:
+        running = []
+        for name in names:
+            state = load(name)
+            cur = state["current"]
+            if state["status"] != "running" or not cur:
+                continue
+            running.append(name)
+            path = worktree(name) / "reports" / "stages" / f"{cur['id']}.md"
+            # A report counts once it has been left alone for a few seconds.
+            if path.is_file() and time.time() - path.stat().st_mtime >= 3:
+                if result_of(cur["role"], path.read_text(encoding="utf-8")):
+                    print("\n".join(advance(state)))
+                    return
+        if not running:
+            for name in names:
+                print("\n".join(advance(load(name))))
+            return
+        if time.time() - start >= limit:
+            for name in running:
+                print("\n".join(advance(load(name))))
+            return
+        time.sleep(2)
+
+
 def cmd_review(name: str) -> None:
     """Start a review round, once the branch is integrated and pushed as it stands."""
     state = load(name)
@@ -686,16 +723,22 @@ def main() -> None:
     """Command line entry point."""
     p = argparse.ArgumentParser(description="Feature-loop driver.")
     p.add_argument(
-        "command", choices=["start", "next", "review", "answer", "approve", "summary", "status"]
+        "command",
+        choices=["start", "next", "wait", "review", "answer", "approve", "summary", "status"],
     )
-    p.add_argument("name", nargs="?")
+    p.add_argument("names", nargs="*")
     a = p.parse_args()
     if a.command == "status":
         cmd_status()
         return
-    if not a.name:
+    if not a.names:
         sys.exit("error: give the ticket name")
-    name = check_name(a.name)
+    if a.command == "wait":
+        cmd_wait([check_name(n) for n in a.names])
+        return
+    if len(a.names) != 1:
+        sys.exit(f"error: {a.command} takes one ticket name")
+    name = check_name(a.names[0])
     if a.command == "start":
         cmd_start(name)
     elif a.command == "next":

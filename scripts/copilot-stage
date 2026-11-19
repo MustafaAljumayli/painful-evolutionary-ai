@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# The command behind Solo's agent tool "Copilot stage". See scripts/copilot-agent.sh.
+exec bash "$(cd "$(dirname "$0")" && pwd)/copilot-agent.sh" stage "$@"
