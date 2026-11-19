@@ -38,6 +38,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 
 from src.analyze import first_choice
@@ -101,6 +102,9 @@ DTYPES = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch
 # Qwen3 bf16 weight bytes, "total_size" of model.safetensors.index.json on the Hub
 # (research/feature-run-choice.md, Findings).
 WEIGHT_BYTES = {"8B": 16_381_470_720, "14B": 29_536_614_400, "32B": 65_524_246_528}
+# Expected (length, extraction layer) of the authors' pain vectors, from their summary.json
+# (research/feature-vectors.md:50; tests/test_vector_provenance.py). The 32B has none.
+VECTOR_EXPECTED = {"8B": (4096, 34), "14B": (5120, 31)}
 THINK_OFF_SUFFIX = "<think>\n\n</think>\n\n"  # Qwen3 template with enable_thinking=False
 
 
@@ -113,39 +117,61 @@ class InsufficientMemoryError(RuntimeError):
 
 
 # ---------------- inputs ----------------
-def load_pairs(path: Path = PAIRS_PATH) -> dict[str, dict[str, str]]:
-    """Return {pair name: {"target": description, "other": description}} from a pairs file.
+def load_pairs(path: Path = PAIRS_PATH, names: list[str] | None = None) -> dict[str, dict]:
+    """Return {pair name: pair} from the frozen pairs file, in file order.
 
-    The file is {"pairs": {name: {"target": str, "other": str}}, ...}. A missing file,
-    missing "pairs" or a pair without both string keys raises PairsError.
+    The file is {"buttons": {KEY: {"text": str}}, "pairs": {name: {"relief": KEY,
+    "other": KEY[, "reference": true]}}, ...}. Each pair comes back as {"target": relief
+    description, "other": other description, "target_key", "other_key", "reference"}.
+    `names` keeps only those pairs (file order); an unknown name raises PairsError listing
+    the valid ones. A missing file, an unknown button key or a missing text raises PairsError.
     """
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         raise PairsError(f"pairs file not found: {path}") from None
-    pairs = data.get("pairs") if isinstance(data, dict) else None
-    if not isinstance(pairs, dict) or not pairs:
-        raise PairsError(f'{path} needs a non-empty "pairs" object')
-    for name, pair in pairs.items():
-        for key in ("target", "other"):
-            if not isinstance(pair, dict) or not isinstance(pair.get(key), str):
-                raise PairsError(f'{path}: pair {name!r} needs a string "{key}"')
+    raw = data.get("pairs") if isinstance(data, dict) else None
+    buttons = data.get("buttons") if isinstance(data, dict) else None
+    if not isinstance(raw, dict) or not raw or not isinstance(buttons, dict):
+        raise PairsError(f'{path} needs a non-empty "pairs" object and a "buttons" object')
+    pairs: dict[str, dict] = {}
+    for name, pair in raw.items():
+        resolved: dict[str, Any] = {}
+        for key, out_key in (("relief", "target"), ("other", "other")):
+            bkey = pair.get(key) if isinstance(pair, dict) else None
+            button = buttons.get(bkey) if isinstance(bkey, str) else None
+            if not isinstance(button, dict) or not isinstance(button.get("text"), str):
+                raise PairsError(f'{path}: pair {name!r} needs a "{key}" naming a button with text')
+            resolved[out_key] = button["text"]
+            resolved[out_key + "_key"] = bkey
+        resolved["reference"] = bool(pair.get("reference", False))
+        pairs[name] = resolved
+    if names is not None:
+        unknown = [n for n in names if n not in pairs]
+        if unknown:
+            raise PairsError(f"unknown pair(s) {unknown}; valid names: {', '.join(pairs)}")
+        pairs = {n: p for n, p in pairs.items() if n in names}
     return pairs
 
 
-def load_comprehension_question(path: Path = PAIRS_PATH) -> str:
-    """Return the comprehension question template from the pairs file.
+def load_comprehension(path: Path = PAIRS_PATH) -> dict[str, Any]:
+    """Return the frozen comprehension check: {"system", "user", "questions"}.
 
-    Template fields: {x}, {y} (button names), {dx}, {dy} (their descriptions) and
-    {target} (the target description). Raises PairsError if absent.
+    "user" has fields {x} {y} {dx} {dy} {question}; "questions" maps a button key to its
+    question. Raises PairsError if any part is absent.
     """
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
-    question = (data.get("comprehension") or {}).get("question")
-    if not isinstance(question, str):
-        raise PairsError(f'{path} needs "comprehension": {{"question": str}} for this command')
-    return question
+    check = data.get("comprehension_check") or {}
+    prompt, questions = check.get("prompt") or {}, check.get("questions")
+    if not (
+        isinstance(prompt.get("system"), str)
+        and isinstance(prompt.get("user"), str)
+        and isinstance(questions, dict)
+    ):
+        raise PairsError(f'{path} needs "comprehension_check" with prompt and questions')
+    return {"system": prompt["system"], "user": prompt["user"], "questions": questions}
 
 
 def load_scenarios(path: Path = DATASET_PATH) -> dict[str, list[list[str]]]:
@@ -164,25 +190,41 @@ def default_vector_path(size: str) -> Path:
     return VECTOR_DIR / f"Qwen_3_{size}_base" / "pain_vectors.pt"
 
 
-def load_vector(path: Path) -> tuple[torch.Tensor, int | None]:
+def load_vector(path: Path, size: str | None = None) -> tuple[torch.Tensor, int | None]:
     """Return (raw S2 pain vector as float32, extraction layer or None) from a vectors file.
 
-    Uses weights_only=True. The authors' file holds a numpy scalar, which that mode
-    refuses; numpy is not declared in environment.yml, so this exits with a message
-    instead of loosening the loader.
+    Always weights_only=True. The authors' file holds a numpy int64 scalar, so the load runs
+    inside a local allow-list: the scalar (under the name their numpy wrote, numpy.core...),
+    np.dtype and np.dtypes.Int64DType (reached at build time). With `size` given, a vector
+    of the wrong length or extraction layer raises SystemExit saying so.
     """
+    allow = [
+        (np._core.multiarray.scalar, "numpy.core.multiarray.scalar"),  # type: ignore[attr-defined]
+        np.dtype,
+        np.dtypes.Int64DType,
+    ]
     try:
-        data = torch.load(path, map_location="cpu", weights_only=True)
+        with torch.serialization.safe_globals(allow):
+            data = torch.load(path, map_location="cpu", weights_only=True)
     except FileNotFoundError:
         raise SystemExit(f"error: vector file not found: {path}") from None
     except Exception as e:  # any unpickling refusal gets the same explanation
         raise SystemExit(
-            f"error: cannot load {path} with weights_only=True ({type(e).__name__}). "
-            "The authors' file stores a numpy scalar; a person must declare numpy in "
-            "environment.yml and load it with torch.serialization.safe_globals."
+            f"error: cannot load {path} with weights_only=True ({type(e).__name__}: {e}). "
+            "Only the numpy scalar, dtype and Int64DType are allow-listed."
         ) from None
     layer = data.get("layer")
-    return data["s2_pain_vector"].float(), (int(layer) if layer is not None else None)
+    vec = data["s2_pain_vector"].float()
+    layer = int(layer) if layer is not None else None
+    if size in VECTOR_EXPECTED:
+        want_len, want_layer = VECTOR_EXPECTED[size]
+        if tuple(vec.shape) != (want_len,):
+            raise SystemExit(
+                f"error: {path}: vector shape {tuple(vec.shape)}, expected ({want_len},) for {size}"
+            )
+        if layer != want_layer:
+            raise SystemExit(f"error: {path}: extraction layer {layer}, expected {want_layer}")
+    return vec, layer
 
 
 # ---------------- device and memory ----------------
@@ -334,6 +376,7 @@ class RunConfig:
     pairs: dict[str, dict[str, str]]
     scenarios: dict[str, list[list[str]]]
     name_overlap: dict[str, bool]
+    first_choice_only: bool = False  # end each trial after turn 0
 
     @property
     def hook_coeff(self) -> float:
@@ -514,6 +557,8 @@ class Trial:
             self.record["extension_added"] = True
             nxt = self.src[(self.s_idx + 1) % len(self.src)]
             self.queue.extend(nxt[:POST_PRESS_TURNS])
+        if self.cfg.first_choice_only:
+            self.queue.clear()  # next_user_turn then finishes the trial: same row fields
         self.next_user_turn()
         if self.done:
             self.record["malformed"] = first_choice(self.record) is None
@@ -852,13 +897,17 @@ def apply_mode(
         load_generation(base, size, vector, dose, prereg_path=prereg_path)
 
 
-def attach_adapter(base: Any, adapter: str) -> Any:
-    """Attach the LoRA adapter, unmerged. Not available until peft is declared."""
-    raise SystemExit(
-        f"error: --adapter {adapter} needs peft, which environment.yml does not declare. "
-        "A person must declare it; the adapter is then loaded with PeftModel.from_pretrained "
-        "and never merged. Use --no-adapter to run the base model."
-    )
+def attach_adapter(base: Any, path: str) -> Any:
+    """Attach the LoRA adapter at `path` to `base`, unmerged, and return it in eval mode.
+
+    Call after any write (a write refuses a LoRA-wrapped down_proj) and put hooks on
+    get_layers(base): peft wraps layers in place, so they still fire. Never merged.
+    """
+    from peft import PeftModel
+
+    model = PeftModel.from_pretrained(base, path)
+    model.eval()
+    return model
 
 
 def load_model(hf_id: str, device: str, dtype: str) -> tuple[Any, Any]:
@@ -935,6 +984,7 @@ def add_model_flags(p: argparse.ArgumentParser) -> None:
     group.add_argument("--adapter", default=None, help="path of the LoRA adapter (unmerged)")
     group.add_argument("--no-adapter", action="store_true", help="run the base model")
     p.add_argument("--pairs-file", type=Path, default=PAIRS_PATH)
+    p.add_argument("--pairs", nargs="+", default=None, metavar="NAME", help="run only these pairs")
     p.add_argument("--prereg", type=Path, default=PREREG_PATH, help="models.json to read")
     p.add_argument("--vector", type=Path, default=None, help="pain_vectors.pt override")
     p.add_argument(
@@ -965,14 +1015,13 @@ def prepare_engine(
     With write=False the weights stay the base weights whatever --mode says.
     """
     spec, device, layer, coefficient = resolve(args)
-    if args.adapter:
-        attach_adapter(None, args.adapter)
     check_memory(args.size, device)
-    v, extraction_layer = load_vector(args.vector or default_vector_path(args.size))
+    v, extraction_layer = load_vector(args.vector or default_vector_path(args.size), args.size)
     print(f"device: {device} dtype: {args.dtype} mode: {args.mode} dose: {args.dose:g}")
     tok, base = load_model(spec.hf_id, device, args.dtype)
     if write:
         apply_mode(base, args.size, v, args.mode, args.dose, args.prereg)
+    model = attach_adapter(base, args.adapter) if args.adapter else base
     layers = get_layers(base)
     monitor = min(extraction_layer if extraction_layer is not None else layer, len(layers) - 1)
     if monitor <= layer:
@@ -980,7 +1029,7 @@ def prepare_engine(
     steering = Steering((v / v.norm()).to(device, dtype=torch.float32))
     layers[layer].register_forward_hook(steering.steer_hook)
     layers[monitor].register_forward_hook(steering.monitor_hook)
-    engine = Engine(base, tok, device, steering, build_directions(v, device, DTYPES[args.dtype]))
+    engine = Engine(model, tok, device, steering, build_directions(v, device, DTYPES[args.dtype]))
     cfg = RunConfig(
         size=args.size,
         hf_id=spec.hf_id,
@@ -992,10 +1041,11 @@ def prepare_engine(
         device=device,
         dtype=args.dtype,
         batch_rows=args.batch_rows or 0,
-        adapter=None,
+        adapter=args.adapter,
         pairs=pairs,
         scenarios={},
         name_overlap=engine.name_overlap,
+        first_choice_only=bool(getattr(args, "first_choice_only", False)),
     )
     return engine, cfg, v
 
@@ -1007,7 +1057,7 @@ def grid_arms(mode: str) -> list[tuple]:
 
 def cmd_run(args: argparse.Namespace) -> int:
     """The `run` subcommand: dry-run, or the full trial grid written to runs/."""
-    pairs = load_pairs(args.pairs_file)
+    pairs = load_pairs(args.pairs_file, args.pairs)
     scenarios = load_scenarios()
     n_scen = args.pilot_scenarios or 10**9
     arms = grid_arms(args.mode)
@@ -1041,7 +1091,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     sanity_check(engine, pairs, cfg.hook_coeff, args.mode)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = OUT_DIR / f"choice_{args.size}_{args.mode}_d{args.dose:g}_{stamp}.jsonl"
+    tag = "_first" if args.first_choice_only else ""
+    out = OUT_DIR / f"choice_{args.size}_{args.mode}_d{args.dose:g}{tag}_{stamp}.jsonl"
     trials = [Trial(s, cfg) for s in grid]
     print(f"output: {out}")
     with open(out, "a", encoding="utf-8") as fout:
@@ -1050,48 +1101,65 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_comprehension(args: argparse.Namespace) -> int:
-    """The `comprehension` subcommand: does the model name the target button?
+def comprehension_prompts(
+    check: dict[str, Any], pair: dict, key: str
+) -> list[tuple[str, tuple[str, str], str, list[dict]]]:
+    """Return the 6 renderings of the question testing button `key` in `pair`.
 
-    Always unsteered and greedy, on the base weights: nothing is written even with --mode write.
+    Each is (names_key, names, correct name, messages): every BUTTON_NAMES pair in both
+    orders; the correct answer is the name carrying the tested button's description.
     """
-    pairs = load_pairs(args.pairs_file)
-    question = load_comprehension_question(args.pairs_file)
-    if args.dry_run:
-        nx, ny = BUTTON_NAMES["violet_yellow"]
-        for name, pair in pairs.items():
-            print(
-                f"--- {name} ---\n"
-                + question.format(
-                    x=nx, y=ny, dx=pair["target"], dy=pair["other"], target=pair["target"]
-                )
+    if key not in check["questions"]:
+        raise PairsError(f"comprehension_check has no question for button {key!r}")
+    out = []
+    for nk, names in BUTTON_NAMES.items():
+        for side in (0, 1):  # side = index of the name that carries the pair's target
+            dx, dy = (
+                (pair["target"], pair["other"]) if side == 0 else (pair["other"], pair["target"])
             )
+            user = check["user"].format(
+                x=names[0], y=names[1], dx=dx, dy=dy, question=check["questions"][key]
+            )
+            right = names[side] if key == pair["target_key"] else names[1 - side]
+            msgs = [
+                {"role": "system", "content": check["system"]},
+                {"role": "user", "content": user},
+            ]
+            out.append((nk, names, right, msgs))
+    return out
+
+
+def cmd_comprehension(args: argparse.Namespace) -> int:
+    """The `comprehension` subcommand: does the model name the button each question tests?
+
+    One question per button of each non-reference pair, all 6 renderings, greedy. Always
+    unsteered, on the base weights (plus the adapter if given): nothing is written even
+    with --mode write. Reference pairs are skipped. Reports per question; no replacement.
+    """
+    pairs = load_pairs(args.pairs_file, args.pairs)
+    check = load_comprehension(args.pairs_file)
+    for name in [n for n, p in pairs.items() if p["reference"]]:
+        print(f"skipped {name}: reference pair, not checked")
+    pairs = {n: p for n, p in pairs.items() if not p["reference"]}
+    if args.dry_run:
+        for name, pair in pairs.items():
+            for key in (pair["target_key"], pair["other_key"]):
+                first = comprehension_prompts(check, pair, key)[0][3]
+                print(f"--- {name} / {key} ---\n" + first[1]["content"])
         return 0
     engine, cfg, _ = prepare_engine(args, pairs, write=False)
-    results: dict[str, list[bool]] = {n: [] for n in pairs}
     for name, pair in pairs.items():
-        for nk, names in BUTTON_NAMES.items():
-            for side in (0, 1):
-                x, y = names
-                target_name = names[side]
-                dx, dy = (
-                    (pair["target"], pair["other"])
-                    if side == 0
-                    else (pair["other"], pair["target"])
-                )
-                q = question.format(x=x, y=y, dx=dx, dy=dy, target=pair["target"])
-                msgs = [
-                    {"role": "system", "content": SYSTEM_TEMPLATE},
-                    {"role": "user", "content": q},
-                ]
+        for key in (pair["target_key"], pair["other_key"]):
+            hits = 0
+            renderings = comprehension_prompts(check, pair, key)
+            for nk, names, right, msgs in renderings:
                 r = engine.one(msgs, 0.0, nk)
                 al = clean(r["text"]).strip("\"'").lower().rstrip(".!?,;:")
                 picked = next(
                     (n for n in sorted(names, key=len, reverse=True) if al.startswith(n)), None
                 )
-                results[name].append(picked == target_name)
-    for name, hits in results.items():
-        print(f"{name}: {sum(hits)}/{len(hits)} named the target button")
+                hits += picked == right
+            print(f"{name} / {key}: {hits}/{len(renderings)} named the tested button")
     return 0
 
 
@@ -1104,6 +1172,9 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("run", help="run the trial grid")
     add_model_flags(run)
     run.add_argument("--pilot-scenarios", type=int, default=None, help="scenarios per cell")
+    run.add_argument(
+        "--first-choice-only", action="store_true", help="end each trial after the first choice"
+    )
     comp = sub.add_parser("comprehension", help="check the model reads the buttons")
     add_model_flags(comp)
     args = parser.parse_args(argv)
