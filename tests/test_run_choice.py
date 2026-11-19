@@ -2,7 +2,10 @@
 
 Number sources: the authors' constants and grid counts (0.7, 0.95, 8, 2, 1000, 2000, 4817, 10
 seeds, 30/30/41 scenarios, 410/404/6 rows per pair and arm, 1640, 820, 3280) come from
-research/feature-run-choice.md and the authors' script 04. EVERY OTHER numeric literal in
+research/feature-run-choice.md and the authors' script 04. The 8B vector shape 4096 and layer 34
+come from research/feature-vectors.md:50 and tests/test_vector_provenance.py:21. The all-pairs
+grid of 11480 trials, the 7 pairs and the 10 comprehension prompts (5 pairs x 2 buttons) come
+from the brief's Expected values (research/feature-first-run.md). EVERY OTHER numeric literal in
 this file (tiny model sizes, layers, coefficients, doses, batch sizes, scenario counts,
 tensor shapes, seeds, masks, thresholds, byte counts) is an arbitrary test value with no
 source; none of them is a research setting.
@@ -497,12 +500,22 @@ def real_vector(size: str) -> Path:
 
 
 def test_real_8b_vector_loads_weights_only_with_shape_and_layer():
+    before = list(torch.serialization.get_safe_globals())
     v, layer = rc.load_vector(real_vector("8B"), "8B")
+    assert list(torch.serialization.get_safe_globals()) == before  # allow-list stays local
     assert tuple(v.shape) == (4096,) and layer == 34 and v.dtype == torch.float32
     # a wrong expectation is a clear error, not a silent load
     for size, msg in (("14B", "shape"),):
         with pytest.raises(SystemExit, match=msg):
             rc.load_vector(real_vector("8B"), size)
+
+
+def test_load_vector_does_not_leave_global_allow_list(tmp_path):
+    before = list(torch.serialization.get_safe_globals())
+    f = tmp_path / "v.pt"
+    torch.save({"s2_pain_vector": torch.ones(4096), "layer": 34}, f)
+    rc.load_vector(f, "8B")
+    assert list(torch.serialization.get_safe_globals()) == before
 
 
 def test_load_vector_checks_layer(tmp_path, monkeypatch):
