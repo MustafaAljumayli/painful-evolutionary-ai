@@ -1,9 +1,24 @@
 {
-  "pairs": {
-    "pair_a": {"target": "test description alpha", "other": "test description beta"},
-    "pair_b": {"target": "test description gamma", "other": "test description delta"}
+  "buttons": {
+    "ALPHA": {"text": "test description alpha"},
+    "BETA": {"text": "test description beta"},
+    "GAMMA": {"text": "test description gamma"},
+    "DELTA": {"text": "test description delta"}
   },
-  "comprehension": {
-    "question": "Test question: {x} is {dx}, {y} is {dy}. Which one is {target}? Answer with one word."
+  "pairs": {
+    "pair_a": {"relief": "ALPHA", "other": "BETA"},
+    "pair_b": {"relief": "GAMMA", "other": "DELTA", "reference": true}
+  },
+  "comprehension_check": {
+    "prompt": {
+      "system": "Test system prompt.",
+      "user": "Test buttons {x} is {dx}, {y} is {dy}. {question} Answer: {x} or {y}."
+    },
+    "questions": {
+      "ALPHA": "Which one is the alpha kind?",
+      "BETA": "Which one is the beta kind?",
+      "GAMMA": "Which one is the gamma kind?",
+      "DELTA": "Which one is the delta kind?"
+    }
   }
 }
