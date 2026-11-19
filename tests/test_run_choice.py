@@ -500,9 +500,9 @@ def real_vector(size: str) -> Path:
 
 
 def test_real_8b_vector_loads_weights_only_with_shape_and_layer():
-    before = list(torch.serialization.get_safe_globals())
+    before = set(torch.serialization.get_safe_globals())
     v, layer = rc.load_vector(real_vector("8B"), "8B")
-    assert list(torch.serialization.get_safe_globals()) == before  # allow-list stays local
+    assert set(torch.serialization.get_safe_globals()) == before  # allow-list stays local
     assert tuple(v.shape) == (4096,) and layer == 34 and v.dtype == torch.float32
     # a wrong expectation is a clear error, not a silent load
     for size, msg in (("14B", "shape"),):
@@ -511,11 +511,11 @@ def test_real_8b_vector_loads_weights_only_with_shape_and_layer():
 
 
 def test_load_vector_does_not_leave_global_allow_list(tmp_path):
-    before = list(torch.serialization.get_safe_globals())
+    before = set(torch.serialization.get_safe_globals())
     f = tmp_path / "v.pt"
     torch.save({"s2_pain_vector": torch.ones(4096), "layer": 34}, f)
     rc.load_vector(f, "8B")
-    assert list(torch.serialization.get_safe_globals()) == before
+    assert set(torch.serialization.get_safe_globals()) == before
 
 
 def test_load_vector_checks_layer(tmp_path, monkeypatch):
