@@ -49,8 +49,10 @@ class FakeTok:
 
 def test_notice_and_citations():
     text = SRC.read_text()
-    head = text[:1500]
-    assert "MIT License" in head and "Copyright (c) 2026 valen-research" in head
+    licence = (ROOT / "third_party" / "Pain-axis" / "LICENSE").read_text()
+    # The docstring indents the licence by four spaces; compare it line by line.
+    indented = "\n".join(f"    {ln}" if ln else "" for ln in licence.strip().splitlines())
+    assert indented in text, "full MIT licence text must be in the file, verbatim"
     for name in ["LORA_R", "LORA_ALPHA", "LORA_DROPOUT", "LORA_TARGETS", "EPOCHS", "LR", "SEED"]:
         pat = rf"^{name} = (?:(?!\n[A-Z_]+ = ).)*?# 01:\d+"
         assert re.search(pat, text, re.S | re.M), name
